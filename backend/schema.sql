@@ -1,9 +1,11 @@
+--suppression des tables si elles existent déjà dans la base de données. Sinon on passe à la suite.
 DROP TABLE IF EXISTS applications;
 DROP TABLE IF EXISTS ads;
 DROP TABLE IF EXISTS people;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS companies;
 
+-- créations des tables (=tableaux) selon les différentes catégories du jobBoard. On indique les headers qu'on veut.
 CREATE TABLE companies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
