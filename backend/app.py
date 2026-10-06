@@ -1,9 +1,28 @@
-from flask import Flask, jsonify
+import sqlite3
+from flask import Flask, jsonify, request
 from db import get_db
 
 app = Flask(__name__)
 
-@app.route("/ads", methods=["GET"]) #C'est un décorateur. Il dit à Flask : « quand quelqu'un envoie une requête GET à l'URL /ads, exécute la fonction juste en dessous.
+def fetch_ad(conn, ad_id):
+    return conn.execute(
+        """SELECT ads.id, ads.title, ads.short_description, ads.description,
+                  ads.salary, ads.location, ads.working_time, ads.contract_type,
+                  ads.created_at,
+                  companies.name AS company,
+                  categories.name AS category,
+                  ads.contact_id
+           FROM ads
+           JOIN companies ON companies.id = ads.company_id
+           JOIN categories ON categories.id = ads.category_id
+           WHERE ads.id = ?""",
+        (ad_id,),
+    ).fetchone()
+
+#--------------------list_ads----------------
+
+#C'est un décorateur. Il dit à Flask : « quand quelqu'un envoie une requête GET à l'URL /ads, exécute la fonction juste en dessous.
+@app.route("/ads", methods=["GET"]) 
 def list_ads():
 
 #Ouvre la connexion à la base, via ta fonction de db.py
@@ -26,28 +45,20 @@ def list_ads():
     conn.close()
     return jsonify([dict(r) for r in rows])
 
+
+#-------------------get ad-------------------------
+
 @app.route("/ads/<int:ad_id>", methods=["GET"])
 def get_ad(ad_id):
     conn = get_db()
-    row = conn.execute(
-        """SELECT ads.id, ads.title, ads.short_description, ads.description,
-                  ads.salary, ads.location, ads.working_time, ads.contract_type,
-                  ads.created_at,
-                  companies.name AS company,
-                  categories.name AS category,
-                  ads.contact_id
-           FROM ads
-           JOIN companies ON companies.id = ads.company_id
-           JOIN categories ON categories.id = ads.category_id
-           WHERE ads.id = ?""",
-        (ad_id,),
-
-#.fetchone() au lieu de fetchall() : on veut une seule ligne, ou None si rien ne correspond.
-    ).fetchone()
+    row = fetch_ad(conn, ad_id)
     conn.close()
     if row is None:
         return jsonify({"error": "Ad not found"}), 404
     return jsonify(dict(row))
+
+
+#-------------------list_company_ads----------------
 
 @app.route("/companies/<int:company_id>/ads", methods=["GET"])
 def list_company_ads(company_id):
@@ -71,6 +82,91 @@ def list_company_ads(company_id):
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+#------------------------------ POST/ads --------------------------------
+
+@app.route("/ads", methods=["POST"])
+def create_ad():
+    data = request.get_json(silent=True) or {}
+
+    for field in ("title", "short_description", "company_id", "category_id"):
+        if data.get(field) in (None, ""):
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            """INSERT INTO ads (title, short_description, description, salary,
+                                location, working_time, contract_type,
+                                company_id, category_id, contact_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                data["title"],
+                data["short_description"],
+                data.get("description"),
+                data.get("salary"),
+                data.get("location"),
+                data.get("working_time"),
+                data.get("contract_type"),
+                data["company_id"],
+                data["category_id"],
+                data.get("contact_id"),
+            ),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Unknown company_id or category_id"}), 400
+
+    row = fetch_ad(conn, cur.lastrowid)
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+
+#------------------create_application-------------------
+
+@app.route("/ads/<int:ad_id>/applications", methods=["POST"])
+def create_application(ad_id):
+    data = request.get_json(silent=True) or {}
+
+    # 1. Champs obligatoires -> 400
+    for field in ("person_id", "message"):
+        if data.get(field) in (None, ""):
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    conn = get_db()
+
+    # 2. L'annonce existe-t-elle ? -> 404
+    ad = conn.execute("SELECT id FROM ads WHERE id = ?", (ad_id,)).fetchone()
+    if ad is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # 3. Insertion
+    try:
+        cur = conn.execute(
+            "INSERT INTO applications (ad_id, person_id, message) VALUES (?, ?, ?)",
+            (ad_id, data["person_id"], data["message"]),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.close()
+        if "UNIQUE" in str(e):
+            return jsonify({"error": "Already applied"}), 409
+        return jsonify({"error": "Unknown person_id"}), 400
+
+    # 4. Relire la candidature créée -> 201
+    row = conn.execute(
+        "SELECT id, ad_id, person_id, message, created_at FROM applications WHERE id = ?",
+        (cur.lastrowid,),
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+
+#------------lance le serveur------------
 
 if __name__ == "__main__":
 
