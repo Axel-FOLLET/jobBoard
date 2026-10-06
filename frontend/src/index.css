@@ -1,0 +1,7 @@
+/* css global pour toute l'application */
+body {
+  background-color: #FBF8F2;
+  color: #1D1D1F;
+  font-family: 'Manrope', sans-serif;
+  margin: 0;
+}
