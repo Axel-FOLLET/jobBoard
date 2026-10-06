@@ -16,8 +16,8 @@ INSERT INTO people (first_name, last_name, email, phone) VALUES
 
 INSERT INTO ads (title, short_description, description, salary, location, working_time, contract_type, company_id, category_id, contact_id) VALUES
   ('Développeur Python', 'Back-end Flask', 'you will have to make website', 42000, 'Paris', 'Temps plein', 'CDI', 1, 1, 1),
-  ('Data analyst', 'Analyse de données, SQL', 'you will have to analyse many data on many arrays', 52000, 'Mulhouse', '35h', 'Stage', 2, 2, 2),
-  ('Cybersécurité', 'Blue team', 'you will have to defend our website against viruses', 100000, 'Londres', 'Temps plein', 'CDI', 1, 3, 3);
+  ('Data analyst', 'Analyse de données, SQL', 'you will have to analyse many data on many arrays', 52000, 'Mulhouse', '35h', 'Stage', 2, 3, 2),
+  ('Cybersécurité', 'Blue team', 'you will have to defend our website against viruses', 100000, 'Londres', 'Temps plein', 'CDI', 1, 1, 3);
 
 INSERT INTO applications (ad_id, person_id, message, created_at) VALUES
   (1, 1, 'Bonjour, votre offre correspond à mon profil.', '2025-01-10 09:00:00'),
