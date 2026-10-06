@@ -26,7 +26,7 @@ CREATE TABLE people (
   email TEXT NOT NULL UNIQUE,
   phone TEXT,
   password_hash TEXT,
-  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin'))
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
 );
 
 CREATE TABLE ads (
