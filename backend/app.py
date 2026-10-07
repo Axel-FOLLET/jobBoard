@@ -1,9 +1,9 @@
 import sqlite3
 from flask import Flask, jsonify, request
 from db import get_db
-
+from routes.auth import auth
 app = Flask(__name__)
-
+app.register_blueprint(auth, url_prefix="/api/auth")
 def fetch_ad(conn, ad_id):
     return conn.execute(
         """SELECT ads.id, ads.title, ads.short_description, ads.description,
