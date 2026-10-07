@@ -1,6 +1,6 @@
 # Contrat de l'API Y.I.A Jobs
 
-Version : J3 (schéma définitif, Blueprints, préfixe `/api`, filtres)
+Version : J3 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscription et connexion)
 
 - Toutes les routes sont sous le préfixe **`/api`**. Les anciennes URL sans préfixe (`/ads`...) renvoient 404.
 - Toutes les réponses sont en **JSON**.
@@ -185,7 +185,61 @@ Les clés étrangères sont en `ON DELETE RESTRICT` : on ne peut pas supprimer u
 
 ---
 
+## Comptes : inscription et connexion
+
+Routes sous `/api/auth`. Il n'y a pas encore de session : la connexion renvoie seulement les informations du compte (les sessions arrivent au J4).
+
+| Route | Succès | Erreurs |
+|---|---|---|
+| `POST /api/auth/register` | 201 : le compte créé | 400 champ manquant ou mot de passe de moins de 8 caractères ; 409 email déjà utilisé |
+| `POST /api/auth/login` | 200 : le compte connecté | 400 champ manquant ; 401 email ou mot de passe incorrect |
+
+### Corps des requêtes
+
+`POST /api/auth/register`
+
+| Champ | Obligatoire | Remarque |
+|---|---|---|
+| `first_name` | oui | |
+| `last_name` | oui | |
+| `email` | oui | espaces retirés et lettres passées en minuscules avant l'enregistrement |
+| `password` | oui | 8 caractères minimum |
+| `phone` | non | |
+
+Le champ `role` n'est pas lu : un compte créé par l'inscription a toujours le rôle `user`.
+
+`POST /api/auth/login` : `email` et `password` sont obligatoires. L'email est normalisé comme à l'inscription (`TEST@Example.com` retrouve `test@example.com`).
+
+### Format de réponse
+
+Pour `POST /api/auth/register` et `POST /api/auth/login` :
+
+```json
+{
+  "id": 4,
+  "first_name": "Alice",
+  "last_name": "Test",
+  "email": "alice.test@example.com",
+  "phone": null,
+  "role": "user"
+}
+```
+
+Clés : `id`, `first_name`, `last_name`, `email`, `phone`, `role`. Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
+
+### Erreurs
+
+| Code | Message | Cas |
+|---|---|---|
+| 400 | `Missing field: <nom du champ>` | champ obligatoire absent ou vide |
+| 400 | `Password must be at least 8 characters` | mot de passe trop court (inscription) |
+| 409 | `Email already used` | email déjà enregistré (casse et espaces ignorés) |
+| 401 | `Invalid credentials` | email inconnu, mot de passe faux ou compte sans mot de passe : le même message dans les trois cas |
+
+---
+
 ## À venir
 
 - J4 : refus de candidature sur une annonce fermée (code d'erreur à définir), clôture transactionnelle d'une annonce, CRUD complet.
+- J4 (comptes) : sessions, déconnexion, compte courant et modification du compte.
 - J5 : pagination et contrôles supplémentaires.
