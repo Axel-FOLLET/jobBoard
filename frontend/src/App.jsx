@@ -1,54 +1,23 @@
+import { Routes, Route } from 'react-router'
+
 import './App.css'
-import JobOffer from './AddJobOffer.jsx'
-import { useState, useEffect } from 'react'
+import Layout from './components/Layout.jsx'
+import JobBoardPage from './pages/JobBoardPage.jsx'
+import LoginPage from './pages/LoginPage.jsx'
+import AccountPage from './pages/AccountPage.jsx'
+import AdminPage from './pages/AdminPage.jsx'
+import NotFoundPage from './pages/NotFoundPage.jsx'
 
-// useState : la « mémoire » fournie par React (accolades = on prend cet outil précis)
-function App() {
-  const [offers, setOffers] = useState([]) // liste vide au départ
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  // Une seule fois, au chargement de la page ([]) on définit l'état de la liste d'annonces
-  useEffect(() => {
-    async function loadOffers() {
-      try {
-        const response = await fetch('/ads')
-        if (!response.ok) {
-          throw new Error('Failed to fetch job offers')
-        }
-        const data = await response.json()
-        setOffers(data)
-      } catch (err) {
-        console.error(err) // détail technique pour nous, dans la console (F12)
-        setError("Nous n'arrivons pas à charger les offres pour le moment. Merci de réessayer dans quelques instants.")
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadOffers()
-  }, [])
-
-  // Affichage selon l'état : chargement, erreur, ou liste d'annonces
-  if (loading) return <p>Chargement…</p>
-  if (error) return <p>{error}</p>
-
-  // Affichage des cartes
+export default function App() {
   return (
-    <div className="page">
-      <h1>HireLoop</h1>
-      {/* Une carte par annonce ; key sert à React seul, d'où id en plus */}
-      {offers.map((offer) => (
-        <JobOffer
-          key={offer.id}
-          id={offer.id}
-          company={offer.company}
-          title={offer.title}
-          shortDescription={offer.short_description}
-          location={offer.location}
-        />
-      ))}
-    </div>
-  )
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/" element={<JobBoardPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
 }
-
-export default App
