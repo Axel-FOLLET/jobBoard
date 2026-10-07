@@ -35,7 +35,8 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
       <p>{title}</p>
       <p>{shortDescription}</p>
       <p>{location}</p>
-      <button onClick={handleClick}>{showDetails ? 'Hide details' : 'View details'}</button>
+      <button onClick={handleClick}>{showDetails ? 'Voir moins' : 'En savoir plus'}</button>
+      <button>Postuler</button>
       {showDetails && loading && <p>Chargement des informations complémentaires…</p>}
       {showDetails && error && <p>{error}</p>}
       {/* Ouvert ET reçu, sinon details.xxx planterait sur null */}
@@ -46,6 +47,7 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
           <p>{details.working_time}</p>
           <p>{details.contract_type}</p>
           <p>{details.category}</p>
+          <p>Publiée le {details.created_at.slice(0, 10)}</p>
         </div>
       )}
     </div>
