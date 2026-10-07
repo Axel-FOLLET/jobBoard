@@ -8,7 +8,7 @@ def fetch_ad(conn, ad_id):
     return conn.execute(
         """SELECT ads.id, ads.title, ads.short_description, ads.description,
                   ads.salary, ads.location, ads.working_time, ads.contract_type,
-                  ads.created_at,
+                  ads.status, ads.created_at,
                   companies.name AS company,
                   categories.name AS category,
                   ads.contact_id
@@ -22,29 +22,53 @@ def fetch_ad(conn, ad_id):
 #--------------------list_ads----------------
 
 #C'est un décorateur. Il dit à Flask : « quand quelqu'un envoie une requête GET à l'URL /ads, exécute la fonction juste en dessous.
-@bp.route("/ads", methods=["GET"]) 
+@bp.route("/ads", methods=["GET"])
 def list_ads():
+    # Condition toujours présente : seulement les annonces ouvertes
+    conditions = ["ads.status = 'open'"]
+    params = []
 
-#Ouvre la connexion à la base, via ta fonction de db.py
-    conn = get_db() 
-    rows = conn.execute(
+    # Filtre q : texte dans le titre ou la description courte
+    q = request.args.get("q")
+    if q:
+        conditions.append("(ads.title LIKE ? OR ads.short_description LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%"])
 
-        #companies.name AS company renomme la colonne en company.
+    # Filtre category : nom de catégorie exact
+    category = request.args.get("category")
+    if category:
+        conditions.append("categories.name = ?")
+        params.append(category)
+
+    # Filtre contract_type : type de contrat exact
+    contract_type = request.args.get("contract_type")
+    if contract_type:
+        conditions.append("ads.contract_type = ?")
+        params.append(contract_type)
+
+    # Filtre location : lieu exact
+    location = request.args.get("location")
+    if location:
+        conditions.append("ads.location = ?")
+        params.append(location)
+
+    # Assemblage : nos fragments SQL seulement, jamais une valeur reçue
+    sql = (
         """SELECT ads.id, ads.title, ads.short_description,
-                  companies.name AS company, ads.location, ads.contract_type 
+                  companies.name AS company, ads.location, ads.contract_type,
+                  ads.status, ads.created_at
            FROM ads
            JOIN companies ON companies.id = ads.company_id
-           ORDER BY ads.created_at DESC, ads.id DESC""" 
-            #On part des annonces, et pour chacune on va chercher son 
-            #entreprise via la clé étrangère company_id et on les tri.
+           JOIN categories ON categories.id = ads.category_id
+           WHERE """
+        + " AND ".join(conditions)
+        + " ORDER BY ads.created_at DESC, ads.id DESC"
+    )
 
-
-#récupère toutes les lignes du résultat sous forme de liste. 
-#Dans rows, tu as donc une liste d'annonces.
-    ).fetchall() 
+    conn = get_db()
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
-
 
 #-------------------get ad-------------------------
 
@@ -73,10 +97,11 @@ def list_company_ads(company_id):
 
     rows = conn.execute(
         """SELECT ads.id, ads.title, ads.short_description,
-                  companies.name AS company, ads.location, ads.contract_type
+                  companies.name AS company, ads.location, ads.contract_type,
+                  ads.status, ads.created_at
            FROM ads
            JOIN companies ON companies.id = ads.company_id
-           WHERE ads.company_id = ?
+           WHERE ads.company_id = ? AND ads.status = 'open'
            ORDER BY ads.created_at DESC, ads.id DESC""",
         (company_id,),
     ).fetchall()
@@ -158,7 +183,7 @@ def create_application(ad_id):
 
     # 4. Relire la candidature créée -> 201
     row = conn.execute(
-        "SELECT id, ad_id, person_id, message, created_at FROM applications WHERE id = ?",
+        "SELECT id, ad_id, person_id, message, status, created_at FROM applications WHERE id = ?",
         (cur.lastrowid,),
     ).fetchone()
     conn.close()
