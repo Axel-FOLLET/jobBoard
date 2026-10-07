@@ -38,17 +38,24 @@ CREATE TABLE ads (
   location TEXT,
   working_time TEXT,
   contract_type TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  company_id INTEGER NOT NULL REFERENCES companies(id),
-  category_id INTEGER NOT NULL REFERENCES categories(id),
-  contact_id INTEGER REFERENCES people(id)
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  company_id INTEGER NOT NULL,
+  category_id INTEGER NOT NULL,
+  contact_id INTEGER,
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+  FOREIGN KEY (contact_id) REFERENCES people(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE applications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ad_id INTEGER NOT NULL REFERENCES ads(id),
-  person_id INTEGER NOT NULL REFERENCES people(id),
+  ad_id INTEGER NOT NULL,
+  person_id INTEGER NOT NULL,
   message TEXT NOT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (ad_id, person_id)
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  UNIQUE (ad_id, person_id),
+  FOREIGN KEY (ad_id) REFERENCES ads(id) ON DELETE RESTRICT,
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE RESTRICT
 );
