@@ -14,7 +14,7 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
       setLoading(true)
       setError(null)
       try {
-        const response = await fetch(`/ads/${id}`)
+        const response = await fetch(`/api/ads/${id}`)
         if (!response.ok) {
           throw new Error('Failed to fetch job offer details')
         }
