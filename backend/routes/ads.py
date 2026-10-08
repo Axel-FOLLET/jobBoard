@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
+from auth_utils import current_user, admin_required
 
 bp = Blueprint("ads", __name__)
 
@@ -155,36 +156,221 @@ def create_ad():
 def create_application(ad_id):
     data = request.get_json(silent=True) or {}
 
-    # 1. Champs obligatoires -> 400
-    for field in ("person_id", "message"):
-        if data.get(field) in (None, ""):
-            return jsonify({"error": f"Missing field: {field}"}), 400
+    user = current_user()
+
+    # --------------------------------------------------
+    # Utilisateur connecté
+    # --------------------------------------------------
+    if user is not None:
+        if not isinstance(data.get("message"), str) or not data["message"].strip():
+            return jsonify({"error": "Missing field: message"}), 400
+
+        person_id = user["id"]
+
+    # --------------------------------------------------
+    # Visiteur non connecté
+    # --------------------------------------------------
+    else:
+        for field in ("first_name", "last_name", "email", "message"):
+            value = data.get(field)
+
+            if not isinstance(value, str) or not value.strip():
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        first_name = data["first_name"].strip()
+        last_name = data["last_name"].strip()
+        email = data["email"].strip().lower()
 
     conn = get_db()
 
-    # 2. L'annonce existe-t-elle ? -> 404
-    ad = conn.execute("SELECT id FROM ads WHERE id = ?", (ad_id,)).fetchone()
+    # --------------------------------------------------
+    # Vérifier que l'annonce existe
+    # --------------------------------------------------
+    ad = conn.execute(
+        "SELECT id, status FROM ads WHERE id = ?",
+        (ad_id,)
+    ).fetchone()
+
     if ad is None:
         conn.close()
         return jsonify({"error": "Ad not found"}), 404
 
-    # 3. Insertion
+    # --------------------------------------------------
+    # Vérifier que l'annonce est ouverte
+    # --------------------------------------------------
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad is closed"}), 409
+
+    # --------------------------------------------------
+    # Visiteur : trouver ou créer la personne
+    # --------------------------------------------------
+    if user is None:
+        person = conn.execute(
+            "SELECT id, password_hash FROM people WHERE email = ?",
+            (email,)
+        ).fetchone()
+
+        if person is None:
+            cur = conn.execute(
+                """
+                INSERT INTO people
+                (first_name, last_name, email, phone)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    first_name,
+                    last_name,
+                    email,
+                    data.get("phone")
+                )
+            )
+
+            person_id = cur.lastrowid
+
+        elif person["password_hash"]:
+            conn.close()
+            return jsonify(
+                {"error": "Login required for this email"}
+            ), 401
+
+        else:
+            person_id = person["id"]
+
+    # --------------------------------------------------
+    # Vérifier si la personne a déjà candidaté
+    # --------------------------------------------------
+    existing_application = conn.execute(
+        """
+        SELECT id
+        FROM applications
+        WHERE ad_id = ? AND person_id = ?
+        """,
+        (ad_id, person_id)
+    ).fetchone()
+
+    if existing_application is not None:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "Already applied"}), 409
+
+    # --------------------------------------------------
+    # Créer la candidature
+    # --------------------------------------------------
     try:
         cur = conn.execute(
-            "INSERT INTO applications (ad_id, person_id, message) VALUES (?, ?, ?)",
-            (ad_id, data["person_id"], data["message"]),
+            """
+            INSERT INTO applications
+            (ad_id, person_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                ad_id,
+                person_id,
+                data["message"]
+            )
         )
-        conn.commit()
-    except sqlite3.IntegrityError as e:
-        conn.close()
-        if "UNIQUE" in str(e):
-            return jsonify({"error": "Already applied"}), 409
-        return jsonify({"error": "Unknown person_id"}), 400
 
-    # 4. Relire la candidature créée -> 201
+        # Une seule transaction
+        conn.commit()
+
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "Already applied"}), 409
+
+    # --------------------------------------------------
+    # Renvoyer la candidature créée
+    # --------------------------------------------------
     row = conn.execute(
-        "SELECT id, ad_id, person_id, message, status, created_at FROM applications WHERE id = ?",
-        (cur.lastrowid,),
+        """
+        SELECT id, ad_id, person_id, message, status, created_at
+        FROM applications
+        WHERE id = ?
+        """,
+        (cur.lastrowid,)
     ).fetchone()
+
     conn.close()
+
     return jsonify(dict(row)), 201
+
+# close_ad
+@bp.route("/ads/<int:ad_id>/closure", methods=["POST"])
+@admin_required
+def close_ad(ad_id):
+    data = request.get_json(silent=True) or {}
+
+    conn = get_db()
+
+    # Vérifier que l'annonce existe
+    ad = conn.execute(
+        "SELECT id, status FROM ads WHERE id = ?",
+        (ad_id,)
+    ).fetchone()
+
+    if ad is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # Vérifier que l'annonce n'est pas déjà fermée
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad already closed"}), 409
+
+    # Vérifier si l'annonce possède des candidatures
+    application = conn.execute(
+        "SELECT id FROM applications WHERE ad_id = ?",
+        (ad_id,)
+    ).fetchone()
+
+    # S'il y a des candidatures, accepted_application_id est obligatoire
+    if application is not None and "accepted_application_id" not in data:
+        conn.close()
+        return jsonify({"error": "Missing field: accepted_application_id"}), 400
+
+    # Si l'annonce n'a aucune candidature, on peut simplement la fermer
+    if application is not None:
+        accepted_application_id = data["accepted_application_id"]
+
+        # Vérifier que la candidature appartient bien à cette annonce
+        accepted_application = conn.execute(
+            "SELECT id FROM applications WHERE id = ? AND ad_id = ?",
+            (accepted_application_id, ad_id)
+        ).fetchone()
+
+        if accepted_application is None:
+            conn.close()
+            return jsonify(
+                {"error": "Application does not belong to this ad"}
+            ), 400
+
+        # Accepter la candidature choisie
+        conn.execute(
+            "UPDATE applications SET status = 'accepted' "
+            "WHERE id = ?",
+            (accepted_application_id,)
+        )
+
+        # Refuser toutes les autres candidatures
+        conn.execute(
+            "UPDATE applications SET status = 'rejected' "
+            "WHERE ad_id = ? AND id != ?",
+            (ad_id, accepted_application_id)
+        )
+
+    # Fermer l'annonce
+    conn.execute(
+        "UPDATE ads SET status = 'closed' WHERE id = ?",
+        (ad_id,)
+    )
+
+    # Une seule validation de la transaction
+    conn.commit()
+
+    # Récupérer l'annonce dans le même format que GET /api/ads/<id>
+    row = fetch_ad(conn, ad_id)
+
+    conn.close()
+
+    return jsonify(dict(row)), 200
