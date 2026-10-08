@@ -1,6 +1,7 @@
 import sqlite3
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
+from auth_utils import current_user
 
 from db import get_db
 
@@ -91,6 +92,9 @@ def login():
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
 
+    session.clear()
+    session["user_id"] = row["id"]
+
     response = {
         "id": row["id"],
         "first_name": row["first_name"],
@@ -103,3 +107,18 @@ def login():
     conn.close()
 
     return jsonify(response), 200
+
+@auth.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return "", 204
+
+@auth.route("/me", methods=["GET"])
+def me():
+    user = current_user()
+
+    if user is None:
+        return jsonify({"error": "Login required"}), 401
+
+    return jsonify(user), 200
+
