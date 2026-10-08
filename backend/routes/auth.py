@@ -1,6 +1,7 @@
 import sqlite3
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
+from auth_utils import current_user, get_json_object, validate_text_field
 
 from db import get_db
 
@@ -10,11 +11,17 @@ auth = Blueprint("auth", __name__)
 
 @auth.route("/register", methods=["POST"])
 def register():
-    data = request.get_json(silent=True) or {}
+    data, error = get_json_object()
+
+    if error:
+        return error
 
     for field in ("first_name", "last_name", "email", "password"):
-        if data.get(field) in (None, ""):
-            return jsonify({"error": f"Missing field: {field}"}), 400
+        error = validate_text_field(data, field, email=(field == "email"))
+
+        if error:
+            return error
+
 
     password = data["password"]
 
@@ -63,11 +70,16 @@ def register():
 
 @auth.route("/login", methods=["POST"])
 def login():
-    data = request.get_json(silent=True) or {}
+    data, error = get_json_object()
+
+    if error:
+        return error
 
     for field in ("email", "password"):
-        if data.get(field) in (None, ""):
-            return jsonify({"error": f"Missing field: {field}"}), 400
+        error = validate_text_field(data, field, email=(field == "email"))
+
+        if error:
+            return error
 
     email = data["email"].strip().lower()
     password = data["password"]
@@ -91,6 +103,9 @@ def login():
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
 
+    session.clear()
+    session["user_id"] = row["id"]
+
     response = {
         "id": row["id"],
         "first_name": row["first_name"],
@@ -103,3 +118,18 @@ def login():
     conn.close()
 
     return jsonify(response), 200
+
+@auth.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return "", 204
+
+@auth.route("/me", methods=["GET"])
+def me():
+    user = current_user()
+
+    if user is None:
+        return jsonify({"error": "Login required"}), 401
+
+    return jsonify(user), 200
+
