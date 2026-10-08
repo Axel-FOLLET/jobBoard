@@ -156,34 +156,63 @@ def create_application(ad_id):
     data = request.get_json(silent=True) or {}
 
     # 1. Champs obligatoires -> 400
-    for field in ("person_id", "message"):
-        if data.get(field) in (None, ""):
+    for field in ("first_name", "last_name", "email", "message"):
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip():
             return jsonify({"error": f"Missing field: {field}"}), 400
+
+    email = data["email"].strip().lower()
 
     conn = get_db()
 
     # 2. L'annonce existe-t-elle ? -> 404
-    ad = conn.execute("SELECT id FROM ads WHERE id = ?", (ad_id,)).fetchone()
+    ad = conn.execute(
+        "SELECT id, status FROM ads WHERE id = ?", (ad_id,)
+    ).fetchone()
     if ad is None:
         conn.close()
         return jsonify({"error": "Ad not found"}), 404
 
-    # 3. Insertion
+    # 3. L'annonce est-elle fermée ? -> 409
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad is closed"}), 409
+
+    # 4. Trouver ou créer la personne
+    person = conn.execute(
+        "SELECT id, password_hash FROM people WHERE email = ?", (email,)
+    ).fetchone()
+
     try:
+        if person is None:
+            cur = conn.execute(
+                "INSERT INTO people (first_name, last_name, email, phone) "
+                "VALUES (?, ?, ?, ?)",
+                (data["first_name"].strip(), data["last_name"].strip(),
+                 email, data.get("phone")),
+            )
+            person_id = cur.lastrowid
+        elif person["password_hash"]:
+            conn.close()
+            return jsonify({"error": "Login required for this email"}), 401
+        else:
+            person_id = person["id"]
+
+        # 5. Insérer la candidature
         cur = conn.execute(
             "INSERT INTO applications (ad_id, person_id, message) VALUES (?, ?, ?)",
-            (ad_id, data["person_id"], data["message"]),
+            (ad_id, person_id, data["message"]),
         )
         conn.commit()
-    except sqlite3.IntegrityError as e:
+    except sqlite3.IntegrityError:
+        conn.rollback()
         conn.close()
-        if "UNIQUE" in str(e):
-            return jsonify({"error": "Already applied"}), 409
-        return jsonify({"error": "Unknown person_id"}), 400
+        return jsonify({"error": "Already applied"}), 409
 
-    # 4. Relire la candidature créée -> 201
+    # 6. Relire et renvoyer la candidature -> 201
     row = conn.execute(
-        "SELECT id, ad_id, person_id, message, status, created_at FROM applications WHERE id = ?",
+        "SELECT id, ad_id, person_id, message, status, created_at "
+        "FROM applications WHERE id = ?",
         (cur.lastrowid,),
     ).fetchone()
     conn.close()
