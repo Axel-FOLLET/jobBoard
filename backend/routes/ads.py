@@ -247,7 +247,7 @@ def close_ad(ad_id):
     ).fetchone()
 
     # S'il y a des candidatures, accepted_application_id est obligatoire
-    if application is not None and "accepted_application_id" not in data:
+    if application is not None and data.get("accepted_application_id") in (None, ""):
         conn.close()
         return jsonify({"error": "Missing field: accepted_application_id"}), 400
 
