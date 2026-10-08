@@ -4,7 +4,7 @@ import sqlite3
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import jsonify, session
+from flask import jsonify, request, session
 
 from db import get_db
 
@@ -75,3 +75,27 @@ def admin_required(view):
         return view(*args, **kwargs)
 
     return wrapped_view
+
+def get_json_object():
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return None, (jsonify({"error": "JSON object expected"}), 400)
+
+    return data, None
+
+def validate_text_field(data, field, email=False):
+    value = data.get(field)
+
+    if not isinstance(value, str):
+        return jsonify({"error": f"Invalid field: {field}"}), 400
+
+    value = value.strip()
+
+    if not value or len(value) > 100:
+        return jsonify({"error": f"Invalid field: {field}"}), 400
+
+    if email and "@" not in value:
+        return jsonify({"error": f"Invalid field: {field}"}), 400
+
+    return None
