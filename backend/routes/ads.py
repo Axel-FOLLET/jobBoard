@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
+from auth_utils import current_user, admin_required
 
 bp = Blueprint("ads", __name__)
 
@@ -155,71 +156,148 @@ def create_ad():
 def create_application(ad_id):
     data = request.get_json(silent=True) or {}
 
-    # 1. Champs obligatoires -> 400
-    for field in ("first_name", "last_name", "email", "message"):
-        value = data.get(field)
-        if not isinstance(value, str) or not value.strip():
-            return jsonify({"error": f"Missing field: {field}"}), 400
+    user = current_user()
 
-    email = data["email"].strip().lower()
+    # --------------------------------------------------
+    # Utilisateur connecté
+    # --------------------------------------------------
+    if user is not None:
+        if not isinstance(data.get("message"), str) or not data["message"].strip():
+            return jsonify({"error": "Missing field: message"}), 400
+
+        person_id = user["id"]
+
+    # --------------------------------------------------
+    # Visiteur non connecté
+    # --------------------------------------------------
+    else:
+        for field in ("first_name", "last_name", "email", "message"):
+            value = data.get(field)
+
+            if not isinstance(value, str) or not value.strip():
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        first_name = data["first_name"].strip()
+        last_name = data["last_name"].strip()
+        email = data["email"].strip().lower()
 
     conn = get_db()
 
-    # 2. L'annonce existe-t-elle ? -> 404
+    # --------------------------------------------------
+    # Vérifier que l'annonce existe
+    # --------------------------------------------------
     ad = conn.execute(
-        "SELECT id, status FROM ads WHERE id = ?", (ad_id,)
+        "SELECT id, status FROM ads WHERE id = ?",
+        (ad_id,)
     ).fetchone()
+
     if ad is None:
         conn.close()
         return jsonify({"error": "Ad not found"}), 404
 
-    # 3. L'annonce est-elle fermée ? -> 409
+    # --------------------------------------------------
+    # Vérifier que l'annonce est ouverte
+    # --------------------------------------------------
     if ad["status"] == "closed":
         conn.close()
         return jsonify({"error": "Ad is closed"}), 409
 
-    # 4. Trouver ou créer la personne
-    person = conn.execute(
-        "SELECT id, password_hash FROM people WHERE email = ?", (email,)
-    ).fetchone()
+    # --------------------------------------------------
+    # Visiteur : trouver ou créer la personne
+    # --------------------------------------------------
+    if user is None:
+        person = conn.execute(
+            "SELECT id, password_hash FROM people WHERE email = ?",
+            (email,)
+        ).fetchone()
 
-    try:
         if person is None:
             cur = conn.execute(
-                "INSERT INTO people (first_name, last_name, email, phone) "
-                "VALUES (?, ?, ?, ?)",
-                (data["first_name"].strip(), data["last_name"].strip(),
-                 email, data.get("phone")),
+                """
+                INSERT INTO people
+                (first_name, last_name, email, phone)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    first_name,
+                    last_name,
+                    email,
+                    data.get("phone")
+                )
             )
+
             person_id = cur.lastrowid
+
         elif person["password_hash"]:
             conn.close()
-            return jsonify({"error": "Login required for this email"}), 401
+            return jsonify(
+                {"error": "Login required for this email"}
+            ), 401
+
         else:
             person_id = person["id"]
 
-        # 5. Insérer la candidature
+    # --------------------------------------------------
+    # Vérifier si la personne a déjà candidaté
+    # --------------------------------------------------
+    existing_application = conn.execute(
+        """
+        SELECT id
+        FROM applications
+        WHERE ad_id = ? AND person_id = ?
+        """,
+        (ad_id, person_id)
+    ).fetchone()
+
+    if existing_application is not None:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "Already applied"}), 409
+
+    # --------------------------------------------------
+    # Créer la candidature
+    # --------------------------------------------------
+    try:
         cur = conn.execute(
-            "INSERT INTO applications (ad_id, person_id, message) VALUES (?, ?, ?)",
-            (ad_id, person_id, data["message"]),
+            """
+            INSERT INTO applications
+            (ad_id, person_id, message)
+            VALUES (?, ?, ?)
+            """,
+            (
+                ad_id,
+                person_id,
+                data["message"]
+            )
         )
+
+        # Une seule transaction
         conn.commit()
+
     except sqlite3.IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"error": "Already applied"}), 409
 
-    # 6. Relire et renvoyer la candidature -> 201
+    # --------------------------------------------------
+    # Renvoyer la candidature créée
+    # --------------------------------------------------
     row = conn.execute(
-        "SELECT id, ad_id, person_id, message, status, created_at "
-        "FROM applications WHERE id = ?",
-        (cur.lastrowid,),
+        """
+        SELECT id, ad_id, person_id, message, status, created_at
+        FROM applications
+        WHERE id = ?
+        """,
+        (cur.lastrowid,)
     ).fetchone()
+
     conn.close()
+
     return jsonify(dict(row)), 201
 
 # close_ad
 @bp.route("/ads/<int:ad_id>/closure", methods=["POST"])
+@admin_required
 def close_ad(ad_id):
     data = request.get_json(silent=True) or {}
 
@@ -247,7 +325,7 @@ def close_ad(ad_id):
     ).fetchone()
 
     # S'il y a des candidatures, accepted_application_id est obligatoire
-    if application is not None and data.get("accepted_application_id") in (None, ""):
+    if application is not None and "accepted_application_id" not in data:
         conn.close()
         return jsonify({"error": "Missing field: accepted_application_id"}), 400
 

@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
+from auth_utils import admin_required
 
 bp = Blueprint("admin", __name__)
 
@@ -78,6 +79,7 @@ def check_table(table):
 
 # GET toutes les lignes
 @bp.route("/admin/<table>", methods=["GET"])
+@admin_required
 def list_records(table):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
@@ -100,6 +102,7 @@ def list_records(table):
 
 # GET une ligne
 @bp.route("/admin/<table>/<int:record_id>", methods=["GET"])
+@admin_required
 def get_record(table, record_id):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
@@ -126,6 +129,7 @@ def get_record(table, record_id):
 
 # POST créer une ligne
 @bp.route("/admin/<table>", methods=["POST"])
+@admin_required
 def create_record(table):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
@@ -192,6 +196,7 @@ def create_record(table):
 
 # PATCH modifier une ligne
 @bp.route("/admin/<table>/<int:record_id>", methods=["PATCH"])
+@admin_required
 def update_record(table, record_id):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
@@ -267,6 +272,7 @@ def update_record(table, record_id):
 
 # DELETE une ligne
 @bp.route("/admin/<table>/<int:record_id>", methods=["DELETE"])
+@admin_required
 def delete_record(table, record_id):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
