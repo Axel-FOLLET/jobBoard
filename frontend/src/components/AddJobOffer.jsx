@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import Form from './Form'
 
 export default function JobOffer({ id, company, title, shortDescription, location }) {
   const [showDetails, setShowDetails] = useState(false) // détail fermé au départ
+  const [showForm, setShowForm] = useState(false) // formulaire fermé au départ
+  
   const [details, setDetails] = useState(null) // null = rien reçu encore
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -36,7 +39,8 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
       <p>{shortDescription}</p>
       <p>{location}</p>
       <button onClick={handleClick}>{showDetails ? 'Voir moins' : 'En savoir plus'}</button>
-      <button>Postuler</button>
+      <button onClick={() => setShowForm(!showForm)}>{showForm ? 'Annuler' : 'Postuler'}</button>
+      {showForm && <Form id={id} onClose={() => setShowForm(false)} />}
       {showDetails && loading && <p>Chargement des informations complémentaires…</p>}
       {showDetails && error && <p>{error}</p>}
       {/* Ouvert ET reçu, sinon details.xxx planterait sur null */}
