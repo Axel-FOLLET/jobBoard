@@ -217,3 +217,82 @@ def create_application(ad_id):
     ).fetchone()
     conn.close()
     return jsonify(dict(row)), 201
+
+# close_ad
+@bp.route("/ads/<int:ad_id>/closure", methods=["POST"])
+def close_ad(ad_id):
+    data = request.get_json(silent=True) or {}
+
+    conn = get_db()
+
+    # Vérifier que l'annonce existe
+    ad = conn.execute(
+        "SELECT id, status FROM ads WHERE id = ?",
+        (ad_id,)
+    ).fetchone()
+
+    if ad is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # Vérifier que l'annonce n'est pas déjà fermée
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad already closed"}), 409
+
+    # Vérifier si l'annonce possède des candidatures
+    application = conn.execute(
+        "SELECT id FROM applications WHERE ad_id = ?",
+        (ad_id,)
+    ).fetchone()
+
+    # S'il y a des candidatures, accepted_application_id est obligatoire
+    if application is not None and "accepted_application_id" not in data:
+        conn.close()
+        return jsonify({"error": "Missing field: accepted_application_id"}), 400
+
+    # Si l'annonce n'a aucune candidature, on peut simplement la fermer
+    if application is not None:
+        accepted_application_id = data["accepted_application_id"]
+
+        # Vérifier que la candidature appartient bien à cette annonce
+        accepted_application = conn.execute(
+            "SELECT id FROM applications WHERE id = ? AND ad_id = ?",
+            (accepted_application_id, ad_id)
+        ).fetchone()
+
+        if accepted_application is None:
+            conn.close()
+            return jsonify(
+                {"error": "Application does not belong to this ad"}
+            ), 400
+
+        # Accepter la candidature choisie
+        conn.execute(
+            "UPDATE applications SET status = 'accepted' "
+            "WHERE id = ?",
+            (accepted_application_id,)
+        )
+
+        # Refuser toutes les autres candidatures
+        conn.execute(
+            "UPDATE applications SET status = 'rejected' "
+            "WHERE ad_id = ? AND id != ?",
+            (ad_id, accepted_application_id)
+        )
+
+    # Fermer l'annonce
+    conn.execute(
+        "UPDATE ads SET status = 'closed' WHERE id = ?",
+        (ad_id,)
+    )
+
+    # Une seule validation de la transaction
+    conn.commit()
+
+    # Récupérer l'annonce dans le même format que GET /api/ads/<id>
+    row = fetch_ad(conn, ad_id)
+
+    conn.close()
+
+    return jsonify(dict(row)), 200
