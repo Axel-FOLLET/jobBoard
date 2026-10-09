@@ -1,7 +1,7 @@
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
-from auth_utils import current_user, admin_required
+from auth_utils import current_user, admin_required, login_required
 
 bp = Blueprint("ads", __name__)
 
@@ -112,6 +112,7 @@ def list_company_ads(company_id):
 #------------------------------ POST/ads --------------------------------
 
 @bp.route("/ads", methods=["POST"])
+@admin_required
 def create_ad():
     data = request.get_json(silent=True) or {}
 
@@ -294,6 +295,28 @@ def create_application(ad_id):
     conn.close()
 
     return jsonify(dict(row)), 201
+
+
+@bp.route("/me/applications", methods=["GET"])
+@login_required
+def my_applications():
+    user = current_user()
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT applications.id, applications.ad_id, ads.title,
+                  companies.name AS company, applications.status,
+                  applications.message, applications.created_at
+           FROM applications
+           JOIN ads ON ads.id = applications.ad_id
+           JOIN companies ON companies.id = ads.company_id
+           WHERE applications.person_id = ?
+           ORDER BY applications.created_at DESC, applications.id DESC""",
+        (user["id"],),
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
 
 # close_ad
 @bp.route("/ads/<int:ad_id>/closure", methods=["POST"])
