@@ -32,7 +32,7 @@ try:
         create_person(
             conn,
             first_name="Admin",
-            last_name="HireLoop",
+            last_name="Y.I.A Jobs",
             email=admin_email,
             password=admin_password,
             role="admin",
