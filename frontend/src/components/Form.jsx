@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 // Nom de chaque champ de l'API, en français, pour le message « Il manque un champ »
@@ -19,6 +19,13 @@ export default function Form ({ id, onClose }) {
     const [status, setStatus] = useState('idle')
     const [sendError, setSendError] = useState('') // message affiché si l'envoi échoue
     const [needLogin, setNeedLogin] = useState(false) // vrai si l'API demande de se connecter (401)
+
+    // Après l'envoi : on laisse le V se dessiner (0,6 s), puis le formulaire se ferme tout seul
+    useEffect(() => {
+        if (status !== 'sent') return
+        const timer = setTimeout(onClose, 1150)
+        return () => clearTimeout(timer)
+    }, [status, onClose])
 
     const handleSubmit = async (event) => {
         event.preventDefault() // Empêche le rechargement de la page lors de la soumission du formulaire
@@ -117,19 +124,6 @@ export default function Form ({ id, onClose }) {
         }
     }
 
-    if (status === 'sent') {
-        return (
-            <div className="confirmation" aria-live="polite">
-                <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
-                    <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
-                </svg>
-
-                <p>Votre candidature est envoyée.</p>
-                <button type="button" onClick={onClose}>Fermer</button>
-            </div>
-        )
-    }
-
     return (
         <form onSubmit={handleSubmit} noValidate>
 
@@ -163,8 +157,20 @@ export default function Form ({ id, onClose }) {
             </label>
             {errors.message && <p>{errors.message}</p>}
 
-            <button type="submit" disabled={status === 'sending'}>{status === 'sending' && <span className="spinner" aria-hidden="true"></span>}{status === 'sending' ? 'Envoi en cours…' : 'Envoyer'}</button>
+            <button type="submit" disabled={status === 'sending' || status === 'sent'}>
+                {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
+                {status === 'sent' ? (
+                    <>
+                        <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
+                            <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
+                        </svg>
+                        Envoyée
+                    </>
+                ) :status === 'sending' ? 'Envoi en cours…' : 'Envoyer'}
+            </button>
             <div aria-live="polite">
+                {/* Le V n'a pas de texte : la phrase est lue par les lecteurs d'écran, sans s'afficher */}
+                {status === 'sent' && <p className="visually-hidden">Votre candidature est envoyée.</p>}
                 {sendError && (
                     <p>
                         {sendError} {needLogin && <Link to="/login">Se connecter</Link>}
