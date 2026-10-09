@@ -2,6 +2,7 @@ import sqlite3
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from auth_utils import (
+    create_person,
     current_user,
     get_json_object,
     login_required,
@@ -27,33 +28,23 @@ def register():
         if error:
             return error
 
-
     password = data["password"]
 
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
 
     email = data["email"].strip().lower()
-    password_hash = generate_password_hash(password)
     conn = get_db()
 
     try:
-        cur = conn.execute(
-            """
-            INSERT INTO people
-            (first_name, last_name, email, phone, password_hash)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                data["first_name"],
-                data["last_name"],
-                email,
-                data.get("phone"),
-                password_hash,
-            ),
+        person_id = create_person(
+            conn,
+            data["first_name"],
+            data["last_name"],
+            email,
+            password,
+            phone=data.get("phone"),
         )
-
-        conn.commit()
 
     except sqlite3.IntegrityError:
         conn.close()
@@ -65,7 +56,7 @@ def register():
         FROM people
         WHERE id = ?
         """,
-        (cur.lastrowid,),
+        (person_id,),
     ).fetchone()
 
     conn.close()
