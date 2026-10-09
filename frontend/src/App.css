@@ -55,3 +55,45 @@ nav a.active {
     text-decoration: underline;
     text-underline-offset: 6px;
 }
+
+.spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 0.5em;
+    vertical-align: -0.15em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.checkmark {
+    width: 3rem;
+    height: 3rem;
+}
+
+.checkmark path {
+    stroke-dasharray: 40;
+    stroke-dashoffset: 40;
+    animation: draw 0.6s ease-out forwards;
+}
+
+@keyframes draw {
+    to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spinner,
+    .checkmark path {
+        animation: none;
+    }
+
+    .checkmark path {
+        stroke-dashoffset: 0;
+    }
+}
