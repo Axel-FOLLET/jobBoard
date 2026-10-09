@@ -1,7 +1,12 @@
 import sqlite3
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
-from auth_utils import current_user, get_json_object, validate_text_field
+from auth_utils import (
+    current_user,
+    get_json_object,
+    login_required,
+    validate_text_field,
+)
 
 from db import get_db
 
@@ -126,6 +131,7 @@ def logout():
 
 
 @auth.route("/me", methods=["GET", "PATCH"])
+@login_required
 def me():
     user = current_user()
 
