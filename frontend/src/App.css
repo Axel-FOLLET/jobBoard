@@ -23,6 +23,10 @@
     color: #6E6E73
 }
 
+.description {
+    white-space: pre-line;
+}
+
 .job-offer button {
     background-color: #A9CCE3;
     color: #1D1D1F;

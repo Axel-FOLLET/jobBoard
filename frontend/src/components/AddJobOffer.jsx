@@ -42,8 +42,8 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
       {/* Ouvert ET reçu, sinon details.xxx planterait sur null */}
       {showDetails && details && (
         <div>
-          <p>{details.description}</p>
-          <p>Salaire :{details.salary}</p>
+          <p className="description">{details.description}</p>
+          <p>{details.salary ? `Salaire : ${details.salary.toLocaleString('fr-FR')}€ brut par an` : 'Salaire non communiqué'}</p>
           <p>{details.working_time}</p>
           <p>{details.contract_type}</p>
           <p>{details.category}</p>
