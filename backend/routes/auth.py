@@ -124,12 +124,92 @@ def logout():
     session.clear()
     return "", 204
 
-@auth.route("/me", methods=["GET"])
+
+@auth.route("/me", methods=["GET", "PATCH"])
 def me():
     user = current_user()
 
     if user is None:
         return jsonify({"error": "Login required"}), 401
 
-    return jsonify(user), 200
+    if request.method == "GET":
+        return jsonify(user), 200
 
+    data, error = get_json_object()
+
+    if error:
+        return error
+
+    if not data:
+        return jsonify({"error": "No field to update"}), 400
+
+    allowed_fields = {"first_name", "last_name", "phone", "email"}
+
+    for field in data:
+        if field not in allowed_fields:
+            return jsonify({"error": f"Unknown field: {field}"}), 400
+
+    for field in data:
+        if field == "phone" and data[field] == "":
+            continue
+
+        error = validate_text_field(
+            data,
+            field,
+            email=(field == "email"),
+        )
+
+        if error:
+            return error
+
+    if "email" in data:
+        data["email"] = data["email"].strip().lower()
+
+    conn = get_db()
+
+    if "email" in data:
+        existing_user = conn.execute(
+            """
+            SELECT id
+            FROM people
+            WHERE email = ? AND id != ?
+            """,
+            (data["email"], user["id"]),
+        ).fetchone()
+
+        if existing_user is not None:
+            conn.close()
+            return jsonify({"error": "Email already used"}), 409
+
+    fields = list(data.keys())
+    values = []
+
+    for field in fields:
+        value = data[field]
+
+        if isinstance(value, str):
+            value = value.strip()
+
+        values.append(value)
+
+    assignments = ", ".join(f"{field} = ?" for field in fields)
+    values.append(user["id"])
+
+    conn.execute(
+        f"UPDATE people SET {assignments} WHERE id = ?",
+        values,
+    )
+    conn.commit()
+
+    row = conn.execute(
+        """
+        SELECT id, first_name, last_name, email, phone, role
+        FROM people
+        WHERE id = ?
+        """,
+        (user["id"],),
+    ).fetchone()
+
+    conn.close()
+
+    return jsonify(dict(row)), 200
