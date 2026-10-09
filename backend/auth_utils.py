@@ -5,6 +5,7 @@ from functools import wraps
 
 from dotenv import load_dotenv
 from flask import jsonify, request, session
+from werkzeug.security import generate_password_hash
 
 from db import get_db
 
@@ -99,3 +100,35 @@ def validate_text_field(data, field, email=False):
         return jsonify({"error": f"Invalid field: {field}"}), 400
 
     return None
+
+def create_person(
+    conn,
+    first_name,
+    last_name,
+    email,
+    password,
+    role="user",
+    phone=None,
+):
+    email = email.strip().lower()
+    password_hash = generate_password_hash(password)
+
+    cursor = conn.execute(
+        """
+        INSERT INTO people
+        (first_name, last_name, email, phone, password_hash, role)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            first_name,
+            last_name,
+            email,
+            phone,
+            password_hash,
+            role,
+        ),
+    )
+
+    conn.commit()
+
+    return cursor.lastrowid
