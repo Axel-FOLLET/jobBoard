@@ -1,0 +1,14 @@
+{
+  "id": 2,
+  "title": "Data analyst",
+  "short_description": "Analyse de données, SQL",
+  "description": "you will have to analyse many data on many arrays",
+  "salary": 52000,
+  "location": "Mulhouse",
+  "working_time": "35h",
+  "contract_type": "Stage",
+  "created_at": "2026-10-05 09:00:01",
+  "company": "GreenWorks",
+  "category": "Data",
+  "contact_id": 2
+}

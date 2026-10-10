@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import AccountPage from './pages/AccountPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import ApplicationsPage from './pages/ApplicationsPage.jsx'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/applications" element={<ApplicationsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

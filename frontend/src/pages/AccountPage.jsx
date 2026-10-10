@@ -11,6 +11,127 @@ const FIELD_NAMES = {
     phone: 'téléphone',
 }
 
+function MonCompte({ user }) {
+    const [firstName, setFirstName] = useState(user.first_name)
+    const [surname, setSurname] = useState(user.last_name)
+    const [email, setEmail] = useState(user.email)
+    const [telephone, setTelephone] = useState(user.phone ?? '')
+    const [status, setStatus] = useState('idle')
+    const [sendError, setSendError] = useState('') // message affiché si l'enregistrement échoue
+    const [needLogin, setNeedLogin] = useState(false) // session perdue (401)
+    const { setUser } = useContext(AuthContext)
+
+    const handleSubmit = async (event) => {
+        event.preventDefault() // Empêche le rechargement de la page lors de la soumission du formulaire
+        if (status === 'sending') return
+
+        // On n'envoie que les champs réellement modifiés
+        const body = {}
+        if (firstName.trim() !== user.first_name) {
+            body.first_name = firstName.trim()
+        }
+        if (surname.trim() !== user.last_name) {
+            body.last_name = surname.trim()
+        }
+        if (email.trim() !== user.email) {
+            body.email = email.trim()
+        }
+        if (telephone.trim() !== (user.phone ?? '')) {
+            body.phone = telephone.trim()
+        }
+
+        setSendError('')
+        setNeedLogin(false)
+
+        if (Object.keys(body).length === 0) {
+            setStatus('nochange')
+            return
+        }
+
+        setStatus('sending')
+
+        try {
+            const response = await fetch(`/api/auth/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            })
+
+            if (response.status === 200) {
+                const updated = await response.json()
+                setUser(updated)
+                setStatus('sent')
+                return
+            }
+
+            // Refus de l'API : le détail technique va dans la console, la personne lit un message en français
+            const data = await response.json()
+            console.error(response.status, data.error)
+            setStatus('error')
+
+            if (response.status === 409) {
+                setSendError('Cet email est déjà utilisé par un autre compte.')
+            } else if (response.status === 401) {
+                setSendError('Votre session a expiré.')
+                setNeedLogin(true)
+            } else if (response.status === 400) {
+                if (typeof data.error === 'string' && data.error.startsWith('Invalid field: ')) {
+                    const field = data.error.replace('Invalid field: ', '')
+                    setSendError(`Merci de vérifier le champ : ${FIELD_NAMES[field] || 'informations du compte'}.`)
+                } else {
+                    setSendError('Merci de vérifier les informations du compte.')
+                }
+            } else {
+                throw new Error(`Unexpected response ${response.status}`)
+            }
+        } catch (err) {
+            // Serveur arrêté, réponse illisible ou code inattendu
+            console.error(err)
+            setStatus('error')
+            setSendError("Nous n'arrivons pas à enregistrer vos informations pour le moment. Merci de réessayer dans quelques instants.")
+        }
+    }
+
+    return (
+        <form onSubmit={handleSubmit} noValidate>
+            <label>
+                Nom :
+                <input type="text" name="surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
+            </label>
+
+            <label>
+                Prénom :
+                <input type="text" name="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </label>
+
+            <label>
+                Téléphone :
+                <input type="text" name="telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
+            </label>
+
+            <label>
+                Email :
+                <input type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+
+            <button type="submit" disabled={status === 'sending'}>
+                {status === 'sending' ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+            <div aria-live="polite">
+                {status === 'sent' && <p>Vos informations sont enregistrées.</p>}
+                {status === 'nochange' && <p>Aucune modification à enregistrer.</p>}
+                {sendError && (
+                    <p role="alert">
+                        {sendError} {needLogin && <Link to="/login">Se connecter</Link>}
+                    </p>
+                )}
+            </div>
+        </form>
+    )
+}
+
 export default function AccountPage() {
     const [firstName, setFirstName] = useState('') // État pour le prénom
     const [surname, setSurname] = useState('') // État pour le nom
@@ -134,7 +255,7 @@ export default function AccountPage() {
     }
 
     if (user) {
-        return <div className="page"><h1>Mon compte</h1></div>
+        return <div className="page"><h1>Mon compte</h1><MonCompte user={user} /></div>
     }
 
     return (

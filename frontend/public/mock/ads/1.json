@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "title": "Développeur Python",
+  "short_description": "Back-end Flask",
+  "description": "you will have to make website",
+  "salary": 42000,
+  "location": "Paris",
+  "working_time": "Temps plein",
+  "contract_type": "CDI",
+  "created_at": "2026-10-05 09:00:00",
+  "company": "TechNova",
+  "category": "Développement",
+  "contact_id": 1
+}
