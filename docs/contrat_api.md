@@ -1,6 +1,6 @@
 # Contrat de l'API Y.I.A Jobs
 
-Version : J4 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscription, connexion, sessions, candidatures, clôture et CRUD admin)
+Version : J5 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscription, connexion, sessions, candidatures, clôture et CRUD admin, création d'annonce réservée à l'admin, « Mes candidatures », pagination)
 
 - Toutes les routes sont sous le préfixe **`/api`**. Les anciennes URL sans préfixe (`/ads`...) renvoient 404.
 - Toutes les réponses sont en **JSON**, sauf les réponses `204 No Content`.
@@ -12,12 +12,18 @@ Version : J4 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscript
 
 ## Routes publiques
 
-| Route                         | Succès                                                                       | Erreurs                                                     |
-| ----------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `GET /api/ads`                | 200 : tableau d'annonces **ouvertes**, de la plus récente à la plus ancienne | aucune (200 et `[]` si aucun résultat)                      |
-| `GET /api/ads/<id>`           | 200 : annonce complète (**même fermée**)                                     | 404 `Ad not found`                                          |
-| `GET /api/companies/<id>/ads` | 200 : tableau d'annonces **ouvertes** de l'entreprise (`[]` possible)        | 404 `Company not found`                                     |
-| `POST /api/ads`               | 201 : l'annonce créée                                                        | 400 champ manquant, ou `company_id` / `category_id` inconnu |
+| Route                         | Succès                                                                       | Erreurs                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `GET /api/ads`                | 200 : tableau d'annonces **ouvertes**, de la plus récente à la plus ancienne | 400 `Invalid pagination` (200 et `[]` si aucun résultat)         |
+| `GET /api/ads/<id>`           | 200 : annonce complète (**même fermée**)                                     | 404 `Ad not found`                                               |
+| `GET /api/companies/<id>/ads` | 200 : tableau d'annonces **ouvertes** de l'entreprise (`[]` possible)        | 404 `Company not found`                                          |
+
+## Routes protégées
+
+| Route                         | Accès                | Succès                                              | Erreurs                                                                                             |
+| ----------------------------- | -------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `POST /api/ads`               | **admin uniquement** | 201 : l'annonce créée                               | 401 `Login required` ; 403 `Admin only` ; 400 champ manquant, ou `company_id` / `category_id` inconnu |
+| `GET /api/me/applications`    | connecté             | 200 : candidatures de la personne connectée         | 401 `Login required`                                                                                |
 
 ---
 
@@ -42,6 +48,94 @@ Règles :
 - Un filtre sans résultat renvoie **200** et `[]`.
 - Les annonces `closed` sont **toujours exclues** de cette liste, même si elles correspondent aux filtres.
 - Les valeurs de filtre doivent être **encodées en URL** (`encodeURIComponent` ou `URLSearchParams` côté front).
+
+---
+
+# Pagination
+
+Disponible sur `GET /api/ads` et `GET /api/admin/<table>`.
+
+| Paramètre  | Rôle                          | Valeurs acceptées      | Défaut si l'autre est fourni |
+| ---------- | ----------------------------- | ---------------------- | ---------------------------- |
+| `page`     | numéro de page, à partir de 1 | entier ≥ 1             | `1`                          |
+| `per_page` | nombre de lignes par page     | entier entre 1 et 50   | `10`                         |
+
+Exemple :
+
+`GET /api/ads?page=2&per_page=10`
+
+Règles :
+
+- Les deux paramètres sont **facultatifs**. Sans aucun des deux, la réponse est la **liste complète**, comme avant.
+- Avec la pagination, seules les lignes de la page demandée sont renvoyées (`OFFSET = (page - 1) * per_page`). La réponse **reste un tableau**.
+- Une page au-delà de la dernière renvoie **200** et `[]`.
+- La pagination se combine avec les filtres de `GET /api/ads`.
+- L'ordre est celui de la route : `created_at` puis `id` décroissants pour `GET /api/ads`, `id` croissant pour `GET /api/admin/<table>`.
+
+## En-tête `X-Total-Count`
+
+Chaque réponse de ces deux routes contient l'en-tête :
+
+```text
+X-Total-Count: 47
+```
+
+Il donne le **nombre total de lignes** correspondant à la requête (**filtres compris**, pagination non comprise), pour que le front calcule le nombre de pages : `Math.ceil(total / per_page)`.
+
+Côté front : `Number(response.headers.get("X-Total-Count"))`.
+
+## Erreur
+
+| Code | Message              | Cas                                                                                     |
+| ---- | -------------------- | --------------------------------------------------------------------------------------- |
+| 400  | `Invalid pagination` | `page` ou `per_page` n'est pas un entier, vaut moins de 1, ou `per_page` dépasse 50     |
+
+Exemples : `?per_page=0`, `?page=abc`, `?per_page=51`.
+
+---
+
+# Mes candidatures
+
+Route :
+
+`GET /api/me/applications`
+
+Réservée aux utilisateurs **connectés** (`@login_required`).
+
+Renvoie les candidatures de la personne connectée, **de la plus récente à la plus ancienne** (`created_at` puis `id` décroissants).
+
+## Contrôle du propriétaire
+
+La personne est **toujours** celle de la session (`current_user()["id"]`). Aucun identifiant n'est lu dans l'URL ni dans le corps de la requête : une personne ne peut lire que **ses propres** candidatures.
+
+## Format de réponse
+
+```json
+[
+  {
+    "id": 1,
+    "ad_id": 3,
+    "title": "Cybersécurité",
+    "company": "TechNova",
+    "status": "accepted",
+    "message": "Bonjour, je suis intéressé.",
+    "created_at": "2026-10-09 14:12:00"
+  }
+]
+```
+
+Clés : `id`, `ad_id`, `title`, `company`, `status`, `message`, `created_at`.
+
+- `id` est l'identifiant de la **candidature** ; `ad_id` celui de l'**annonce**.
+- `title` est le titre de l'annonce, `company` le **nom** de l'entreprise.
+- `status` vaut `pending`, `accepted` ou `rejected` (voir [Statuts](#statuts)).
+- Sans candidature : **200** et `[]`.
+
+## Erreur
+
+| Code | Message          | Cas                      |
+| ---- | ---------------- | ------------------------ |
+| 401  | `Login required` | utilisateur non connecté |
 
 ---
 
@@ -224,6 +318,8 @@ Clés : `id`, `ad_id`, `person_id`, `message`, `status`, `created_at`.
 
 ## `POST /api/ads`
 
+Réservée aux administrateurs : 401 `Login required` sans connexion, 403 `Admin only` pour un compte non admin.
+
 | Champ               | Obligatoire | Remarque                     |
 | ------------------- | ----------- | ---------------------------- |
 | `title`             | oui         |                              |
@@ -362,7 +458,9 @@ Toute autre table retourne :
 
 `GET /api/admin/<table>`
 
-Retourne tous les enregistrements de la table.
+Retourne tous les enregistrements de la table, triés par `id` croissant.
+
+Accepte la [pagination](#pagination) (`page`, `per_page`, en-tête `X-Total-Count`, 400 `Invalid pagination`).
 
 ### Détail
 
@@ -582,6 +680,7 @@ Les champs `status` et `created_at` ne sont pas modifiables par le CRUD.
 | ---- | ---------------------------- | ------------------------------------------------------- |
 | 400  | `Missing field: <nom>`       | champ obligatoire absent ou vide                        |
 | 400  | `Unknown field: <nom>`       | champ non autorisé                                      |
+| 400  | `Invalid pagination`         | `page` / `per_page` invalide sur la liste               |
 | 400  | `No fields to update`        | `PATCH` sans champ à modifier                           |
 | 400  | `Unknown reference`          | clé étrangère inconnue                                  |
 | 400  | `Invalid value`              | valeur refusée par une contrainte `CHECK`               |
@@ -641,8 +740,8 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST /api/auth/register` | 201 : le compte créé                               | 400 champ manquant ou mot de passe de moins de 8 caractères ; 409 email déjà utilisé |
-| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ manquant ; 401 `Invalid credentials`                                       |
+| `POST /api/auth/register` | 201 : le compte créé                               | 400 champ invalide ou mot de passe de moins de 8 caractères ; 409 email déjà utilisé |
+| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials`                                       |
 
 ## Corps des requêtes
 
@@ -665,6 +764,22 @@ Le champ `role` n'est pas lu : un compte créé par l'inscription a toujours le 
 L'email est normalisé comme à l'inscription.
 
 Une connexion réussie crée une session contenant l'identifiant de l'utilisateur.
+
+## Validation des champs
+
+À l'inscription et à la connexion, chaque champ texte obligatoire (`first_name`, `last_name`, `email`, `password` ; `email` et `password` pour la connexion) est validé. Un champ **manquant**, qui n'est pas du texte, vide (après retrait des espaces) ou de plus de 100 caractères renvoie :
+
+```json
+{
+  "error": "Invalid field: email"
+}
+```
+
+→ **400**. Le nom du champ est celui du **premier** champ invalide.
+
+Un `email` sans `@` renvoie aussi `Invalid field: email`.
+
+Si le corps n'est pas un objet JSON : **400** `JSON object expected`.
 
 ---
 
@@ -695,7 +810,8 @@ Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
 
 | Code | Message                                  | Cas                                                          |
 | ---- | ---------------------------------------- | ------------------------------------------------------------ |
-| 400  | `Missing field: <nom du champ>`          | champ obligatoire absent ou vide                             |
+| 400  | `Invalid field: <nom du champ>`          | champ absent, vide, non textuel, trop long, ou email sans `@` |
+| 400  | `JSON object expected`                   | corps de requête qui n'est pas un objet JSON                 |
 | 400  | `Password must be at least 8 characters` | mot de passe trop court                                      |
 | 409  | `Email already used`                     | email déjà enregistré                                        |
 | 401  | `Invalid credentials`                    | email inconnu, mot de passe faux ou compte sans mot de passe |
@@ -740,7 +856,16 @@ ou :
 
 ### Administrateur
 
-L'accès aux routes d'administration et à la clôture des annonces est autorisé.
+L'accès aux routes d'administration, à la création d'annonces (`POST /api/ads`) et à la clôture des annonces est autorisé.
+
+### Récapitulatif des routes protégées
+
+| Route                               | Décorateur        |
+| ----------------------------------- | ----------------- |
+| `POST /api/ads`                     | `@admin_required` |
+| `POST /api/ads/<id>/closure`        | `@admin_required` |
+| `GET/POST/PATCH/DELETE /api/admin/…`| `@admin_required` |
+| `GET /api/me/applications`          | `@login_required` |
 
 ---
 
@@ -764,9 +889,9 @@ avec le code **409**.
 
 ---
 
-# J5
+# Changements J5
 
-- Pagination.
-- Contrôles supplémentaires.
-- Déconnexion.
-- Consultation et modification du compte courant si prévues par le contrat final.
+- `POST /api/ads` est réservée à l'admin (401 / 403).
+- Nouvelle route `GET /api/me/applications` (candidatures de la personne connectée).
+- Pagination facultative (`page`, `per_page`, en-tête `X-Total-Count`) sur `GET /api/ads` et `GET /api/admin/<table>`.
+- Inscription et connexion : un champ manquant ou invalide renvoie `Invalid field: <nom>` (au lieu de `Missing field: <nom>`).

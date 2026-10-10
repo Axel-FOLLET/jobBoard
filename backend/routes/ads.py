@@ -1,7 +1,7 @@
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
-from auth_utils import current_user, admin_required
+from auth_utils import current_user, admin_required, login_required
 
 bp = Blueprint("ads", __name__)
 
@@ -25,6 +25,11 @@ def fetch_ad(conn, ad_id):
 #C'est un décorateur. Il dit à Flask : « quand quelqu'un envoie une requête GET à l'URL /ads, exécute la fonction juste en dessous.
 @bp.route("/ads", methods=["GET"])
 def list_ads():
+    # Pagination facultative : None, (page, per_page) ou "invalid"
+    pagination = read_pagination()
+    if pagination == "invalid":
+        return jsonify({"error": "Invalid pagination"}), 400
+
     # Condition toujours présente : seulement les annonces ouvertes
     conditions = ["ads.status = 'open'"]
     params = []
@@ -67,9 +72,30 @@ def list_ads():
     )
 
     conn = get_db()
+
+    # Total des lignes (filtres compris), avant LIMIT/OFFSET
+    total = conn.execute(
+        """SELECT COUNT(*)
+           FROM ads
+           JOIN companies ON companies.id = ads.company_id
+           JOIN categories ON categories.id = ads.category_id
+           WHERE """
+        + " AND ".join(conditions),
+        params,
+    ).fetchone()[0]
+
+    # Pagination demandée : seulement les lignes de la page
+    if pagination is not None:
+        page, per_page = pagination
+        sql += " LIMIT ? OFFSET ?"
+        params = params + [per_page, (page - 1) * per_page]
+
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+
+    response = jsonify([dict(r) for r in rows])
+    response.headers["X-Total-Count"] = str(total)
+    return response
 
 #-------------------get ad-------------------------
 
@@ -112,6 +138,7 @@ def list_company_ads(company_id):
 #------------------------------ POST/ads --------------------------------
 
 @bp.route("/ads", methods=["POST"])
+@admin_required
 def create_ad():
     data = request.get_json(silent=True) or {}
 
@@ -295,6 +322,28 @@ def create_application(ad_id):
 
     return jsonify(dict(row)), 201
 
+
+@bp.route("/me/applications", methods=["GET"])
+@login_required
+def my_applications():
+    user = current_user()
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT applications.id, applications.ad_id, ads.title,
+                  companies.name AS company, applications.status,
+                  applications.message, applications.created_at
+           FROM applications
+           JOIN ads ON ads.id = applications.ad_id
+           JOIN companies ON companies.id = ads.company_id
+           WHERE applications.person_id = ?
+           ORDER BY applications.created_at DESC, applications.id DESC""",
+        (user["id"],),
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+
 # close_ad
 @bp.route("/ads/<int:ad_id>/closure", methods=["POST"])
 @admin_required
@@ -374,3 +423,35 @@ def close_ad(ad_id):
     conn.close()
 
     return jsonify(dict(row)), 200
+
+#------------------read_pagination----------------
+
+# Renvoie None (pas de pagination), (page, per_page) (valide) ou "invalid"
+def read_pagination():
+    page_raw = request.args.get("page")
+    per_page_raw = request.args.get("per_page")
+
+    # pas de pagination demandée
+    if page_raw is None and per_page_raw is None:
+        return None
+
+    # une seule valeur donnée : on complète avec une valeur par défaut
+    if page_raw is None:
+        page_raw = "1"
+    if per_page_raw is None:
+        per_page_raw = "10"
+
+    # les deux doivent être des entiers
+    try:
+        page = int(page_raw)
+        per_page = int(per_page_raw)
+    except ValueError:
+        # numéro de page ou taille de page non entier
+        return "invalid"
+
+    # page >= 1 et 1 <= per_page <= 50
+    if page < 1 or per_page < 1 or per_page > 50:
+        # plage invalide
+        return "invalid"
+
+    return page, per_page

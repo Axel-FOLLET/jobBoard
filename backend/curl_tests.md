@@ -964,3 +964,246 @@ Réponse :
   "error": "Application does not belong to this ad"
 }
 ```
+
+## J5 Tests
+
+# Parti 1 : droits admin
+
+# Test 1 : Création d'une annonce par un admin (attendu : 201 CREATED)
+
+```bash : inscription du sujet test dans le base de donnée et connexion en admin
+curl -i -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Admin","last_name":"Test","email":"admin@example.com","password":"motdepasse8"}'
+sqlite3 jobboard.db "UPDATE people SET role = 'admin' WHERE email = 'admin@example.com';"
+sqlite3 jobboard.db "SELECT email, role FROM people;"
+curl -i -X POST "http://127.0.0.1:5000/api/auth/login" -H "Content-Type: application/json" -c cookies_admin.txt -d '{"email":"admin@example.com","password":"motdepasse8"}'
+```
+
+```bash : création d'une annonce
+curl -i -X POST "http://127.0.0.1:5000/api/ads" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"title":"Test","short_description":"Desc","company_id":1,"category_id":1}'
+```
+
+Code obtenu : 201 CREATED
+
+Réponse :
+
+```json
+{
+  "category": "D\u00e9veloppement",
+  "company": "TechNova",
+  "contact_id": null,
+  "contract_type": null,
+  "created_at": "2026-10-09 09:16:38",
+  "description": null,
+  "id": 4,
+  "location": null,
+  "salary": null,
+  "short_description": "Desc",
+  "status": "open",
+  "title": "Test",
+  "working_time": null
+}
+```
+
+# Test 2 : Création d'une annonce par un user (attendu : 403 FORBIDDEN)
+
+```bash : inscription du sujet test dans le base de donnée et connexion en user
+curl -i -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Bobby","last_name":"Test","email":"bob2@example.com","password":"motdepasse2"}'
+curl -i -X POST "http://127.0.0.1:5000/api/auth/login" -H "Content-Type: application/json" -c cookies_bobby.txt -d '{"email":"bob2@example.com","password":"motdepasse2"}'
+```
+
+```bash : création d'une annonce
+curl -i -X POST "http://127.0.0.1:5000/api/ads" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"title":"Test","short_description":"Desc","company_id":1,"category_id":1}'
+```
+
+Code obtenu : 403 FORBIDDEN
+
+Réponse :
+
+```json
+{
+  "error": "Admin only"
+}
+```
+
+# Partie 2 : pagination
+
+# Test 1 : test de la pagination pour 1 annonce par page : page 1 (attendu : 200 OK, 1 annonce, X-Total-Count : 2) ---> X-Total-Count = nombre total d'annonces
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?page=1&per_page=1"
+```
+
+Code obtenu : 200
+X-Total-Count : 2
+
+Réponse :
+
+```json
+[
+  {
+    "company": "TechNova",
+    "contract_type": "CDI",
+    "created_at": "2026-10-09 13:48:43",
+    "id": 3,
+    "location": "Londres",
+    "short_description": "Blue team",
+    "status": "open",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+```
+
+# Test 2 : test de la pagination pour 1 annonce par page : page 2 (attendu : 200 OK, 1 annonce, X-Total-Count : 2) ---> X-Total-Count = nombre total d'annonces
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?page=2&per_page=1"
+```
+
+Code obtenu : 200
+X-Total-Count : 2
+
+Réponse :
+
+```json
+[
+  {
+    "company": "TechNova",
+    "contract_type": "CDI",
+    "created_at": "2026-10-09 13:48:43",
+    "id": 1,
+    "location": "Paris",
+    "short_description": "Back-end Flask",
+    "status": "open",
+    "title": "D\u00e9veloppeur Python"
+  }
+]
+```
+
+# Test 3 : cas impossible afficher la page 3 alors qu'il n'y a que 2 annonces (attendu : 200 OK, [], X-Total-Count : 2)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?page=3&per_page=1"
+```
+
+Code obtenu : 200
+X-Total-Count : 2
+
+Réponse :
+
+```json
+[]
+```
+
+# Test 4 : cas impossible, afficher 0 ads par page (attendu : 400, Invalid pagination)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?per_page=0"
+```
+
+Code obtenu : 400
+
+Réponse :
+
+```json
+{
+  "error": "Invalid pagination"
+}
+```
+
+# Test 5 : cas impossible afficher la page "abc" (attendu : 400, Invalid pagination)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?page=abc"
+```
+
+Code obtenu : 400
+
+Réponse :
+
+```json
+{
+  "error": "Invalid pagination"
+}
+```
+
+# Test 5 : affichage de toutes les ads ouvertes : point de vue chercheur d'emploi (attendu : 200 OK, 2 annonces, X-Total-Count : 2)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads"
+```
+
+Code obtenu : 200
+X-Total-Count : 2
+
+Réponse :
+
+```json
+[
+  {
+    "company": "TechNova",
+    "contract_type": "CDI",
+    "created_at": "2026-10-09 13:48:43",
+    "id": 3,
+    "location": "Londres",
+    "short_description": "Blue team",
+    "status": "open",
+    "title": "Cybers\u00e9curit\u00e9"
+  },
+  {
+    "company": "TechNova",
+    "contract_type": "CDI",
+    "created_at": "2026-10-09 13:48:43",
+    "id": 1,
+    "location": "Paris",
+    "short_description": "Back-end Flask",
+    "status": "open",
+    "title": "D\u00e9veloppeur Python"
+  }
+]
+```
+
+# Test 6 : affichage de toutes les ads ouvertes et fermée : point de vue admin (attendu : 200 OK, 2 annonces, X-Total-Count : 3)
+
+```bash
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?page=1&per_page=2"
+```
+
+Code obtenu : 200
+X-Total-Count : 3
+
+Réponse :
+
+```json
+[
+  {
+    "category_id": 1,
+    "company_id": 1,
+    "contact_id": 1,
+    "contract_type": "CDI",
+    "created_at": "2026-10-09 13:48:43",
+    "description": "you will dev many website",
+    "id": 1,
+    "location": "Paris",
+    "salary": 42000,
+    "short_description": "Back-end Flask",
+    "status": "open",
+    "title": "D\u00e9veloppeur Python",
+    "working_time": "Temps plein"
+  },
+  {
+    "category_id": 3,
+    "company_id": 2,
+    "contact_id": 2,
+    "contract_type": "Stage",
+    "created_at": "2026-10-09 13:48:43",
+    "description": "you will analize many arrays",
+    "id": 2,
+    "location": "Mulhouse",
+    "salary": 52000,
+    "short_description": "Analyse de donn\u00e9es, SQL",
+    "status": "closed",
+    "title": "Data analyst",
+    "working_time": "35h"
+  }
+]
+```
