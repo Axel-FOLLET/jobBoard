@@ -2,7 +2,7 @@ import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
 from auth_utils import admin_required
-
+from routes.ads import read_pagination
 bp = Blueprint("admin", __name__)
 
 # Tables autorisées
@@ -84,20 +84,36 @@ def list_records(table):
     if not check_table(table):
         return jsonify({"error": "Unknown table"}), 404
 
+    # Pagination facultative : None, (page, per_page) ou "invalid"
+    pagination = read_pagination()
+    if pagination == "invalid":
+        return jsonify({"error": "Invalid pagination"}), 400
+
     conn = get_db()
 
     columns = TABLES[table]
 
+    total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
     sql = f"""
         SELECT {", ".join(columns)}
         FROM {table}
+        ORDER BY id
     """
+    params = []
 
-    rows = conn.execute(sql).fetchall()
+    if pagination is not None:
+        page, per_page = pagination
+        sql += " LIMIT ? OFFSET ?"
+        params = [per_page, (page - 1) * per_page]
+
+    rows = conn.execute(sql, params).fetchall()
 
     conn.close()
 
-    return jsonify([dict(row) for row in rows])
+    response = jsonify([dict(row) for row in rows])
+    response.headers["X-Total-Count"] = str(total)
+    return response
 
 
 # GET une ligne
