@@ -11,8 +11,14 @@ CREATE TABLE companies (
   name TEXT NOT NULL,
   description TEXT,
   location TEXT,
-  website TEXT
+  website TEXT,
+  -- SIREN : texte de 9 chiffres (garde les zéros du début) ; NULL pour une ancienne fiche à compléter
+  siren TEXT CHECK (siren IS NULL OR (length(siren) = 9 AND siren NOT GLOB '*[^0-9]*'))
 );
+
+-- Un SIREN renseigné n'apparaît qu'une fois (plusieurs NULL restent possibles).
+-- Même index que celui créé par migrate_siren.py sur une base existante.
+CREATE UNIQUE INDEX companies_siren_unique ON companies(siren);
 
 CREATE TABLE categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

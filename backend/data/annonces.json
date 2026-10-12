@@ -2,60 +2,70 @@
   "companies": [
     {
       "name": "Orvelune",
+      "siren": "936442573",
       "description": "Orvelune développe des applications de devis, de facturation et de suivi commercial pour les artisans et les petites entreprises de services. Créée en 2016, la société compte 32 salariés, dont une partie échange chaque semaine avec les clients pour comprendre leurs tâches administratives. Les nouvelles fonctions sont d'abord essayées par quelques utilisateurs volontaires avant leur diffusion. Au bureau, le vendredi matin sert à examiner les demandes reçues et à décider lesquelles méritent une place dans la prochaine livraison.",
       "location": "75009 Paris",
       "website": "https://orvelune.example.com"
     },
     {
       "name": "Talvoria",
+      "siren": "802651141",
       "description": "Talvoria conçoit des interfaces et des services en ligne pour les communes, les médiathèques et les structures de quartier. Fondée en 2018, l'entreprise réunit 24 salariés qui travaillent sur des démarches concrètes, comme réserver une salle ou inscrire un enfant à un atelier. Ses designers rencontrent les agents d'accueil avant de dessiner les écrans. Chaque projet comprend des essais au clavier et une vérification des contrastes, car les services doivent rester utilisables sans équipement récent.",
       "location": "69003 Lyon",
       "website": "https://talvoria.example.com"
     },
     {
       "name": "Nerquilio",
+      "siren": "816924450",
       "description": "Nerquilio édite des outils de suivi des livraisons pour les transporteurs régionaux et les entreprises qui gèrent plusieurs entrepôts. L'entreprise, créée en 2013, emploie 46 salariés et relie les informations des exploitants, des chauffeurs et des responsables de quai. Les équipes observent régulièrement une tournée pour comprendre les contraintes du terrain. Les incidents sont discutés à partir des faits et des journaux techniques, avec une règle simple : chercher la cause avant de désigner un responsable.",
       "location": "13002 Marseille",
       "website": "https://nerquilio.example.com"
     },
     {
       "name": "Velsorine",
+      "siren": "800477390",
       "description": "Velsorine accompagne les associations dans la gestion des adhésions, des dons et des activités proposées aux habitants. Créée en 2019, cette entreprise de 18 salariés adapte les outils aux moyens disponibles, y compris lorsque les bénévoles partagent un ordinateur ancien. Les projets commencent par une séance de travail dans les locaux de l'association. La documentation utilise des exemples tirés des tâches quotidiennes, et les formations laissent du temps aux participants pour refaire seuls les manipulations.",
       "location": "31000 Toulouse",
       "website": "https://velsorine.example.com"
     },
     {
       "name": "Praxeline",
+      "siren": "814474490",
       "description": "Praxeline construit des plateformes de réservation pour les théâtres, les salles de concert et les lieux d'exposition indépendants. Fondée en 2015, elle compte 38 salariés qui suivent aussi bien la vente des billets que leur contrôle à l'entrée. Les équipes préparent les ouvertures de billetterie avec les responsables des lieux pour anticiper les fortes affluences. Une répétition technique précède chaque lancement important, et les retours des agents de caisse orientent les corrections des parcours.",
       "location": "33000 Bordeaux",
       "website": "https://praxeline.example.com"
     },
     {
       "name": "Dorlavie",
+      "siren": "988538765",
       "description": "Dorlavie développe des outils de classement, de recherche et de circulation des documents pour les communes et les établissements publics. Créée en 2012, la société rassemble 41 salariés, parmi lesquels des spécialistes des archives et du développement logiciel. Elle conserve une trace des règles de classement et des décisions prises avec chaque client. Les nouveaux arrivants découvrent d'abord le parcours d'un dossier papier, afin de comprendre ce que sa version numérique doit préserver.",
       "location": "59000 Lille",
       "website": "https://dorlavie.example.com"
     },
     {
       "name": "Mirelquaz",
+      "siren": "978207835",
       "description": "Mirelquaz conçoit des applications de pilotage pour les coopératives agricoles, artisanales et de distribution. Fondée en 2017, l'entreprise emploie 29 salariés et rassemble dans un même outil les commandes, les stocks et les résultats de gestion. Les indicateurs sont définis avec les comptables et les responsables d'activité, puis accompagnés d'une explication de leur calcul. Une démonstration mensuelle permet aux clients de discuter des évolutions avant que l'équipe ne les ajoute au calendrier.",
       "location": "44000 Nantes",
       "website": "https://mirelquaz.example.com"
     },
     {
       "name": "Solvenyre",
+      "siren": "823026273",
       "description": "Solvenyre développe des plateformes de formation pour les centres de formation professionnelle et les organismes associatifs. Créée en 2014, la société compte 35 salariés et travaille sur l'inscription, les contenus pédagogiques et le suivi des parcours. Ses concepteurs assistent à des séances de formation pour observer les difficultés des apprenants. Les échanges internes portent souvent sur un écran ou un exercice précis, et les formateurs disposent d'un espace d'essai avant toute modification importante.",
       "location": "67000 Strasbourg",
       "website": "https://solvenyre.example.com"
     },
     {
       "name": "Brumelix",
+      "siren": "874685365",
       "description": "Brumelix crée des applications de suivi des équipements pour les ateliers de maintenance et les entreprises de location de matériel. Fondée en 2020, elle réunit 22 salariés autour des inventaires, des interventions et de la consultation des historiques sur téléphone. Les développeurs essaient les parcours avec des techniciens qui travaillent parfois sans connexion. Un petit atelier dans les locaux permet de tester la lecture des étiquettes et la saisie d'une intervention dans des conditions proches du terrain.",
       "location": "35000 Rennes",
       "website": "https://brumelix.example.com"
     },
     {
       "name": "Caldrivane",
+      "siren": "932147135",
       "description": "Caldrivane accompagne les maisons de quartier, les associations locales et les petites structures de services dans leurs projets numériques. Créée en 2018, cette entreprise de 27 salariés réalise des applications, organise leur installation et assure l'assistance des utilisateurs. Elle propose des déploiements progressifs pour éviter de changer toutes les habitudes en une semaine. Les responsables de projet réservent chaque mois une demi-journée aux retours des structures accompagnées, puis publient les décisions dans un compte rendu partagé.",
       "location": "34000 Montpellier",
       "website": "https://caldrivane.example.com"

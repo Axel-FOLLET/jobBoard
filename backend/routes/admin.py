@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
@@ -7,7 +8,7 @@ bp = Blueprint("admin", __name__)
 
 # Tables autorisées
 TABLES = {
-    "companies": ["id", "name", "description", "location", "website"],
+    "companies": ["id", "name", "description", "location", "website", "siren"],
     "categories": ["id", "name"],
     "people": ["id", "first_name", "last_name", "email", "phone", "role"],
     "ads": [
@@ -37,7 +38,7 @@ TABLES = {
 
 # Champs modifiables
 EDITABLE_FIELDS = {
-    "companies": ["name", "description", "location", "website"],
+    "companies": ["name", "description", "location", "website", "siren"],
     "categories": ["name"],
     "people": ["first_name", "last_name", "email", "phone", "role"],
     "ads": [
@@ -62,7 +63,7 @@ EDITABLE_FIELDS = {
 
 # Champs obligatoires à la création
 REQUIRED_FIELDS = {
-    "companies": ["name"],
+    "companies": ["name", "siren"],
     "categories": ["name"],
     "people": ["first_name", "last_name", "email"],
     "ads": ["title", "short_description", "company_id", "category_id"],
@@ -75,6 +76,26 @@ def check_table(table):
     if table not in TABLES:
         return False
     return True
+
+
+# Vérifier et nettoyer le SIREN : None si valide, sinon la réponse d'erreur.
+# Le SIREN doit être une chaîne (jamais un nombre JSON, pour garder les zéros du début).
+def check_siren(data):
+    siren = data.get("siren")
+
+    if isinstance(siren, str):
+        siren = siren.strip()
+        data["siren"] = siren
+
+    # absent, null, vide ou seulement des espaces (aussi en PATCH : on ne peut pas l'effacer)
+    if siren in (None, ""):
+        return jsonify({"error": "Missing field: siren"}), 400
+
+    # exactement 9 chiffres de 0 à 9, en texte
+    if not isinstance(siren, str) or not re.fullmatch(r"[0-9]{9}", siren):
+        return jsonify({"error": "Invalid value"}), 400
+
+    return None
 
 
 # GET toutes les lignes
@@ -162,6 +183,12 @@ def create_record(table):
         if data.get(field) in (None, ""):
             return jsonify({"error": f"Missing field: {field}"}), 400
 
+    # Valider le SIREN (obligatoire à la création)
+    if table == "companies":
+        error = check_siren(data)
+        if error:
+            return error
+
     # Normaliser l'email
     if table == "people":
         data["email"] = data["email"].strip().lower()
@@ -226,6 +253,12 @@ def update_record(table, record_id):
 
     if not data:
         return jsonify({"error": "No fields to update"}), 400
+
+    # Valider le SIREN seulement s'il est envoyé (sinon il garde sa valeur)
+    if table == "companies" and "siren" in data:
+        error = check_siren(data)
+        if error:
+            return error
 
     # Normaliser l'email
     if table == "people" and "email" in data:

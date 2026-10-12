@@ -967,7 +967,7 @@ Réponse :
 
 ## J5 Tests
 
-# Parti 1 : droits admin
+# Partie 1 : droits admin
 
 # Test 1 : Création d'une annonce par un admin (attendu : 201 CREATED)
 
@@ -1206,4 +1206,553 @@ Réponse :
     "working_time": "35h"
   }
 ]
+```
+
+## J6 tests
+
+# Partie 1 : python
+
+# Test 1 : test de remplissage auto de la database (attendu :companies: 12, categories: 6, people: 13, ads: 53, applications: 4)
+
+```bash
+python3 init_db.py
+python3 seed_data.py
+```
+
+Réponse :
+
+```bash
+companies: 12
+categories: 6
+people: 13
+ads: 53
+applications: 4
+```
+
+# Test 2 : test de remplissage auto de la database avec la base déjà pleine (attendu : "Base déjà remplie : 10 entreprise(s) du fichier existe(nt) déjà. Relance python init_db.py avant python seed_data.py.")
+
+```bash
+python3 seed_data.py
+```
+
+Réponse :
+
+```bash
+Base déjà remplie : 10 entreprise(s) du fichier existe(nt) déjà. Relance python init_db.py avant python seed_data.py.
+```
+
+# Partie 2 : curl
+
+# Test 1 : affichage des ads (attendu : X-Total-Count: 52, 200 OK, 52 ads)
+
+```bash
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads"
+```
+
+Code obtenu : 200
+X-Total-Count : 52
+
+Réponse :
+
+```json
+[
+  {
+    "company": "Caldrivane",
+    "contract_type": "Freelance",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 53,
+    "location": "34000 Montpellier",
+    "short_description": "Concevez des d\u00e9marches de proximit\u00e9 \u00e0 partir des situations v\u00e9cues par les habitants.",
+    "status": "open",
+    "title": "Designer UX ind\u00e9pendant"
+  },
+  {
+    "company": "Caldrivane",
+    "contract_type": "Alternance",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 52,
+    "location": "34000 Montpellier",
+    "short_description": "Apprenez \u00e0 d\u00e9velopper des modules utiles aux structures qui organisent la vie locale.",
+    "status": "open",
+    "title": "D\u00e9veloppeur logiciel en alternance"
+  },
+  {
+    "company": "Caldrivane",
+    "contract_type": "CDD",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 51,
+    "location": "34000 Montpellier",
+    "short_description": "Guidez les utilisateurs \u00e0 distance jusqu'\u00e0 la r\u00e9solution de leur demande.",
+    "status": "open",
+    "title": "Technicien assistance \u00e0 distance"
+  }
+]
+```
+
+ect jusqu'à la 52ème...
+
+# Test 2 : affichage de 4 ads par page (attendu : X-Total-Count: 52, 200 OK, 4 ads)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/ads?per_page=4"
+```
+
+Code obtenu : 200
+X-Total-Count : 52
+
+Réponse :
+
+```json
+[
+  {
+    "company": "Caldrivane",
+    "contract_type": "Freelance",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 53,
+    "location": "34000 Montpellier",
+    "short_description": "Concevez des d\u00e9marches de proximit\u00e9 \u00e0 partir des situations v\u00e9cues par les habitants.",
+    "status": "open",
+    "title": "Designer UX ind\u00e9pendant"
+  },
+  {
+    "company": "Caldrivane",
+    "contract_type": "Alternance",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 52,
+    "location": "34000 Montpellier",
+    "short_description": "Apprenez \u00e0 d\u00e9velopper des modules utiles aux structures qui organisent la vie locale.",
+    "status": "open",
+    "title": "D\u00e9veloppeur logiciel en alternance"
+  },
+  {
+    "company": "Caldrivane",
+    "contract_type": "CDD",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 51,
+    "location": "34000 Montpellier",
+    "short_description": "Guidez les utilisateurs \u00e0 distance jusqu'\u00e0 la r\u00e9solution de leur demande.",
+    "status": "open",
+    "title": "Technicien assistance \u00e0 distance"
+  },
+  {
+    "company": "Caldrivane",
+    "contract_type": "CDI",
+    "created_at": "2026-10-12 10:10:16",
+    "id": 50,
+    "location": "34000 Montpellier",
+    "short_description": "Organisez des changements num\u00e9riques que les petites structures peuvent absorber.",
+    "status": "open",
+    "title": "Chef de projet transformation num\u00e9rique"
+  }
+]
+```
+
+# Test 3 : essayer de voir ses candidatures dans son compte sans se connecter (attendu : Login required, 401)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/me/applications"
+```
+
+Code obtenu : 401
+
+Réponse :
+
+```json
+{
+  "error": "Login required"
+}
+```
+
+# Test 4 : compte connecté sans candidature (attendu : [], 200)
+
+```bash
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/me/applications"
+```
+
+Code obtenu : 200
+
+Réponse :
+
+```json
+[]
+```
+
+# Test 5 : postuler à une offre et la voir dans son espace (attendu : une offre avec 7 champs, 200)
+
+```bash
+## postuler à une candidature
+curl -s -X POST "http://127.0.0.1:5000/api/ads/3/applications" -H "Content-Type: application/json" -b cookies_bob.txt -d '{"message":"Candidature de Bob"}'
+
+## profil de bob espace "mes candidatures"
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/me/applications"
+```
+
+Réponse du POST :
+Code obtenu : 201
+
+````json
+{
+  "ad_id": 3,
+  "created_at": "2026-10-12 12:11:24",
+  "id": 5,
+  "message": "Candidature de Bob",
+  "person_id": 4,
+  "status": "pending"
+}
+
+Réponse du GET :
+Code obtenu : 201
+
+```json
+[
+  {
+    "ad_id": 3,
+    "company": "TechNova",
+    "created_at": "2026-10-12 12:11:24",
+    "id": 5,
+    "message": "Candidature de Bob",
+    "status": "pending",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+````
+
+# Test 6 : essayé de repostuler à une candidature (attendu : already applied, 409 conflict)
+
+```bash
+## postuler à une candidature
+curl -s -X POST "http://127.0.0.1:5000/api/ads/3/applications" -H "Content-Type: application/json" -b cookies_bob.txt -d '{"message":"Candidature de Bob"}'
+```
+
+Code obtenu : 409
+
+Réponse :
+
+```json
+{
+  "error": "Already applied"
+}
+```
+
+# Test 7 : vision de l'espace mes candidature alors que plusieures personnes ont postulé à la même (attendu : une offre avec 7 champs pour chacun, 200)
+
+```bash
+## postuler à une candidature
+curl -s -X POST "http://127.0.0.1:5000/api/ads/3/applications" -H "Content-Type: application/json" -b cookies_carla.txt -d '{"message":"Candidature de Carla"}'
+
+
+## profil de bob et carla espace "mes candidatures"
+curl -i -b cookies_carla.txt "http://127.0.0.1:5000/api/me/applications"
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/me/applications"
+```
+
+Code obtenu : 200
+
+Réponse :
+
+```json
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Mon, 12 Oct 2026 12:16:05 GMT
+Content-Type: application/json
+Content-Length: 212
+Vary: Cookie
+Connection: close
+
+[
+  {
+    "ad_id": 3,
+    "company": "TechNova",
+    "created_at": "2026-10-12 12:16:04",
+    "id": 6,
+    "message": "Candidature de Carla",
+    "status": "pending",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Mon, 12 Oct 2026 12:16:05 GMT
+Content-Type: application/json
+Content-Length: 210
+Vary: Cookie
+Connection: close
+
+[
+  {
+    "ad_id": 3,
+    "company": "TechNova",
+    "created_at": "2026-10-12 12:11:24",
+    "id": 5,
+    "message": "Candidature de Bob",
+    "status": "pending",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+```
+
+# Test 8 : vision de l'espace mes candidature de bob et carla alors que bob est retenu (attendu : bob = accepted, carla = rejected, une offre avec 7 champs pour chacun, 200)
+
+```bash
+## accepter bob
+curl -s -X POST "http://127.0.0.1:5000/api/ads/3/closure" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"accepted_application_id": 5}'
+
+## profil de bob et carla espace "mes candidatures"
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/me/applications"
+curl -i -b cookies_carla.txt "http://127.0.0.1:5000/api/me/applications"
+```
+
+Code obtenu : 200
+
+Réponse :
+
+```json
+{
+  "category": "D\u00e9veloppement",
+  "company": "TechNova",
+  "contact_id": 3,
+  "contract_type": "CDI",
+  "created_at": "2026-10-12 12:05:35",
+  "description": "you will defend our website against virus",
+  "id": 3,
+  "location": "Londres",
+  "salary": 100000,
+  "short_description": "Blue team",
+  "status": "closed",
+  "title": "Cybers\u00e9curit\u00e9",
+  "working_time": "Temps plein"
+}
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Mon, 12 Oct 2026 12:28:02 GMT
+Content-Type: application/json
+Content-Length: 211
+Vary: Cookie
+Connection: close
+
+[
+  {
+    "ad_id": 3,
+    "company": "TechNova",
+    "created_at": "2026-10-12 12:11:24",
+    "id": 5,
+    "message": "Candidature de Bob",
+    "status": "accepted",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Mon, 12 Oct 2026 12:28:02 GMT
+Content-Type: application/json
+Content-Length: 213
+Vary: Cookie
+Connection: close
+
+[
+  {
+    "ad_id": 3,
+    "company": "TechNova",
+    "created_at": "2026-10-12 12:16:04",
+    "id": 6,
+    "message": "Candidature de Carla",
+    "status": "rejected",
+    "title": "Cybers\u00e9curit\u00e9"
+  }
+]
+```
+
+# Partie 3 : SIREN des entreprises
+
+# Test 1 : lecture d'une fiche avec son SIREN (attendu : 200, siren présent)
+
+```bash
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/1"
+```
+
+Code obtenu : 200
+
+```json
+{
+  "description": "Studio de développement web",
+  "id": 1,
+  "location": "Paris",
+  "name": "TechNova",
+  "siren": "000000991",
+  "website": "https://technova.example.com"
+}
+```
+
+# Test 2 : création correcte, espaces retirés (attendu : 201, siren "123456789")
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Test SA","siren":" 123456789 "}'
+```
+
+Code obtenu : 201
+
+```json
+{
+  "description": null,
+  "id": 13,
+  "location": null,
+  "name": "Test SA",
+  "siren": "123456789",
+  "website": null
+}
+```
+
+# Test 3 : SIREN absent, vide, espaces ou null (attendu : 400, Missing field: siren)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":""}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"   "}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":null}'
+```
+
+Code obtenu : 400 (les 4 cas)
+
+```json
+{ "error": "Missing field: siren" }
+```
+
+# Test 4 : format refusé (attendu : 400, Invalid value)
+
+```bash
+## nombre JSON (pas une chaîne)
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":123456780}'
+## lettres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"12345678A"}'
+## 8 chiffres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"12345678"}'
+## 10 chiffres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"1234567890"}'
+```
+
+Code obtenu : 400 (les 4 cas)
+
+```json
+{ "error": "Invalid value" }
+```
+
+# Test 5 : SIREN commençant par zéro (attendu : 201, le zéro est conservé)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Zero SA","siren":"012345678"}'
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/14"
+sqlite3 jobboard.db "SELECT quote(siren), typeof(siren) FROM companies WHERE id = 14;"
+```
+
+Code obtenu : 201 puis 200
+
+```json
+{
+  "description": null,
+  "id": 14,
+  "location": null,
+  "name": "Zero SA",
+  "siren": "012345678",
+  "website": null
+}
+```
+
+En base : `'012345678'|text`
+
+# Test 6 : deux créations avec le même SIREN (attendu : 409, Already exists, pas de nouvelle fiche)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Zero SA","siren":"012345678"}'
+sqlite3 jobboard.db "SELECT quote(siren), typeof(siren) FROM companies WHERE name = 'Zero SA';"
+```
+
+Code obtenu : 409
+
+```json
+{ "error": "Already exists" }
+```
+
+Nombre de fiches avant / après : 14 / 14.
+
+# Test 7 : modification vers le SIREN d'une autre entreprise (attendu : 409, fiche inchangée)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Renommé","siren":"012345678"}'
+sqlite3 jobboard.db "SELECT name, siren FROM companies WHERE id = 13;"
+```
+
+Code obtenu : 409
+
+```json
+{ "error": "Already exists" }
+```
+
+Fiche inchangée : `Test SA|123456789` (le nom n'a pas été modifié non plus).
+
+# Test 10 : modification qui garde son propre SIREN (attendu : 200)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":"123456789","location":"Paris"}'
+```
+
+Code obtenu : 200
+
+```json
+{
+  "description": null,
+  "id": 13,
+  "location": "Paris",
+  "name": "Test SA",
+  "siren": "123456789",
+  "website": null
+}
+```
+
+# Test 11 : modification sans siren, puis tentative d'effacement (attendu : 200 SIREN conservé, puis 400)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"website":"https://test.example.com"}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":null}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":""}'
+```
+
+Code obtenu : 200, puis 400 et 400
+
+```json
+{"description":null,"id":13,"location":"Paris","name":"Test SA","siren":"123456789","website":"https://test.example.com"}
+{"error":"Missing field: siren"}
+{"error":"Missing field: siren"}
+```
+
+# Test 12 : ancienne fiche sans SIREN, lisible puis complétée (attendu : 200 avec null, puis 200 avec le SIREN)
+
+```bash
+sqlite3 jobboard.db "INSERT INTO companies (name) VALUES ('Ancienne');"
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/15"
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/15" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":"555555555"}'
+```
+
+Code obtenu : 200 puis 200
+
+```json
+{"description":null,"id":15,"location":null,"name":"Ancienne","siren":null,"website":null}
+{"description":null,"id":15,"location":null,"name":"Ancienne","siren":"555555555","website":null}
+```
+
+# Test 13 : protections et autres tables inchangées (attendu : 401, 403, 201, 400)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -d '{"name":"X","siren":"111111111"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_bob.txt -d '{"name":"X","siren":"111111111"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/categories" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Nouvelle"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/categories" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"N2","siren":"111111111"}'
+```
+
+Code obtenu : 401, 403, 201, 400
+
+```json
+{"error":"Login required"}
+{"error":"Admin only"}
+{"id":7,"name":"Nouvelle"}
+{"error":"Unknown field: siren"}
 ```

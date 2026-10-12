@@ -514,6 +514,7 @@ name
 description
 location
 website
+siren
 ```
 
 Champs modifiables :
@@ -523,13 +524,43 @@ name
 description
 location
 website
+siren
 ```
 
-Champ obligatoire à la création :
+Champs obligatoires à la création :
 
 ```text
 name
+siren
 ```
+
+### SIREN
+
+Le `siren` identifie une entreprise : **une entreprise n'a qu'une fiche**. Seul le format et l'unicité dans notre base sont contrôlés, pas la correspondance réelle auprès de l'INSEE.
+
+- **Chaîne de 9 chiffres** (`"012345678"`), jamais un nombre JSON : les zéros du début sont conservés.
+- Les espaces au début et à la fin sont retirés avant la validation.
+- Une ancienne fiche non renseignée a `"siren": null` (provisoire) ; elle reste lisible et peut recevoir un SIREN valide par `PATCH`.
+- `PATCH` sans `siren` : la valeur actuelle est conservée. `PATCH` avec le SIREN de la fiche elle-même : accepté (ce n'est pas un doublon).
+- Un SIREN déjà renseigné **ne peut pas être effacé** (`null`, `""` ou espaces → 400).
+- L'unicité est garantie par la base (index unique `companies_siren_unique`), y compris pour deux créations simultanées.
+
+Exemple de création :
+
+```json
+{
+  "name": "Orvelune",
+  "siren": "936442573"
+}
+```
+
+| Code | Message                 | Cas                                                                                   |
+| ---- | ----------------------- | ------------------------------------------------------------------------------------- |
+| 400  | `Missing field: siren`  | `siren` absent à la création, ou `null`, vide ou composé d'espaces (création ou `PATCH`) |
+| 400  | `Invalid value`         | `siren` qui n'est pas une chaîne (nombre JSON...), contient autre chose que des chiffres, ou n'a pas 9 chiffres |
+| 409  | `Already exists`        | SIREN déjà attribué à une autre fiche (la fiche n'est ni créée ni modifiée)            |
+
+Migration d'une base existante : `python migrate_siren.py [fichier.db]` ajoute la colonne (`NULL` pour les fiches existantes) et l'index unique, sans réinitialiser la base. Un deuxième lancement ne change rien.
 
 ---
 
@@ -903,6 +934,13 @@ Dans ce cas, le CRUD retourne :
 ```
 
 avec le code **409**.
+
+---
+
+# Changements J6
+
+- `companies` reçoit `siren` (chaîne de 9 chiffres, unique, obligatoire à la création) : voir [SIREN](#siren).
+- Script `migrate_siren.py` pour ajouter le SIREN à une base existante sans la réinitialiser.
 
 ---
 
