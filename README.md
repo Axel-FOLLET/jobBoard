@@ -27,15 +27,19 @@ JobBoard/
 │   │   └── verification.py      confirmation de l'adresse email
 │   ├── pending_registrations.py inscriptions en attente de confirmation de l'adresse
 │   ├── mailer.py                envoi des emails (SMTP), désactivable
+│   ├── login_limit.py           limite des essais de connexion (5 échecs en 15 minutes)
 │   ├── create_admin.py          crée le compte administrateur à partir du .env
 │   ├── schema.sql               création des tables
 │   ├── seed.sql                 données de test
 │   ├── init_db.py               crée jobboard.db à partir de schema.sql et seed.sql
+│   ├── seed_data.py             remplit la base à partir de data/annonces.json (une seule fois)
+│   ├── migrate_siren.py         ajoute le SIREN à une base existante sans la réinitialiser
 │   ├── data/annonces.json       données des annonces pour le remplissage de la base
 │   ├── queries.sql              requêtes d'exemple
 │   ├── checks.sql               insertions qui doivent échouer (tests des contraintes)
 │   ├── curl_tests.md            tests de l'API (commandes, codes, réponses)
 │   ├── tests/curl_auth.md       tests de l'inscription et de la connexion
+│   ├── tests/test_login_limit.py tests automatiques de la limite de connexion (unittest)
 │   ├── .env.example             modèle du fichier de configuration
 │   └── requirements.txt
 ├── docs/
@@ -70,6 +74,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # puis remplacer les valeurs « change-me » (voir Configuration)
 python init_db.py               # crée jobboard.db et affiche le nombre de lignes par table
+python seed_data.py             # ajoute une cinquantaine d'annonces (à relancer seulement après init_db.py)
 python create_admin.py          # crée l'administrateur décrit dans .env
 python app.py                   # API sur http://localhost:5000
 ```
@@ -107,7 +112,7 @@ Le cookie de session est `HttpOnly` et `SameSite=Lax`. Les mots de passe sont en
 
 | Table | Rôle | Colonnes principales |
 | --- | --- | --- |
-| `companies` | entreprises | id, name, description, location, website |
+| `companies` | entreprises | id, name, description, location, website, siren (9 chiffres, unique) |
 | `categories` | catégories d'annonces | id, name (unique) |
 | `people` | candidats, comptes et responsables d'annonces | id, first_name, last_name, email (unique), phone, password_hash, role (`user` / `admin`) |
 | `ads` | annonces | id, title, short_description, description, salary, location, working_time, contract_type, status (`open` / `closed`), created_at, company_id, category_id, contact_id |
@@ -149,7 +154,7 @@ Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs,
 
 Les tables de l'administration sont `companies`, `categories`, `people`, `ads` et `applications`. Filtres de `GET /api/ads`, tous facultatifs et combinables : `q` (texte dans le titre ou la description courte), `category`, `contract_type` et `location` (valeurs exactes). Les annonces fermées n’apparaissent jamais dans les listes. Pagination : `page` et `per_page` (1 à 50) ; le nombre total de lignes est renvoyé dans l'en-tête `X-Total-Count`.
 
-Les routes renvoient 200 en lecture, 201 à la création, 202 pour une inscription en attente de confirmation, 204 après une suppression, 400 pour une requête invalide, 401 sans connexion ou pour un identifiant incorrect, 403 sans le rôle administrateur, 404 pour une ressource inexistante et 409 pour un doublon ou une ligne encore référencée. Les erreurs ont toujours la forme `{"error": "..."}`. Aucune réponse ne contient de mot de passe ni d'empreinte. Les commandes et résultats des vérifications sont dans `backend/curl_tests.md` et `backend/tests/curl_auth.md`.
+Les routes renvoient 200 en lecture, 201 à la création, 202 pour une inscription en attente de confirmation, 204 après une suppression, 400 pour une requête invalide, 401 sans connexion ou pour un identifiant incorrect, 403 sans le rôle administrateur, 404 pour une ressource inexistante, 409 pour un doublon ou une ligne encore référencée, et 429 après 5 échecs de connexion en 15 minutes pour le même email (l'en-tête `Retry-After` donne l'attente en secondes). Les erreurs ont toujours la forme `{"error": "..."}`. Aucune réponse ne contient de mot de passe ni d'empreinte. Les commandes et résultats des vérifications sont dans `backend/curl_tests.md` et `backend/tests/curl_auth.md` ; les tests automatiques de la limite de connexion se lancent depuis `backend/` avec `python -m unittest tests.test_login_limit -v`.
 
 ## Pages
 Navigation sans rechargement de la page (React Router), avec une barre commune : la page active est marquée et le logo ramène à l'accueil. Le menu dépend de la personne : « Offres d'emploi » et « Espace recruteur » pour tous, « Connexion » pour un visiteur, « Espace candidat » et « Se déconnecter » une fois connecté, « Administration » pour un administrateur. Sur mobile, il se replie derrière un bouton « Menu ».

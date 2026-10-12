@@ -1,4 +1,5 @@
 --suppression des tables si elles existent déjà dans la base de données. Sinon on passe à la suite.
+DROP TABLE IF EXISTS pending_registrations;
 DROP TABLE IF EXISTS applications;
 DROP TABLE IF EXISTS ads;
 DROP TABLE IF EXISTS people;
@@ -63,5 +64,21 @@ CREATE TABLE applications (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
   UNIQUE (ad_id, person_id),
   FOREIGN KEY (ad_id) REFERENCES ads(id) ON DELETE RESTRICT,
-  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE RESTRICT
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE RESTRICT);
+
+-- Inscription en attente : une personne déjà dans people sans mot de passe crée son compte.
+-- Rien n’est appliqué à sa fiche avant le clic sur le lien envoyé à son adresse.
+-- Seule l’empreinte SHA-256 du jeton est gardée ; le lien vaut 24 heures et ne sert qu’une fois.
+-- Même définition que pending_registrations.py, qui crée la table sur une base déjà en place.
+CREATE TABLE pending_registrations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL UNIQUE,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  phone TEXT,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
 );

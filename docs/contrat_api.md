@@ -772,7 +772,8 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `POST /api/auth/register` | 201 : compte créé ; 202 : vérification de l’email en attente | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
-| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials`                                       |
+| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials` ; 429 `Too many attempts` (en-tête `Retry-After`) |
+| `POST /api/auth/verify`   | 200 : la fiche, compte activé (pas de session ouverte) | 400 `Invalid field: token` ou `Invalid value` ; 409 `Email already used`             |
 
 ## Corps des requêtes
 
@@ -846,6 +847,7 @@ Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
 | 400  | `Password must be at least 8 characters` | mot de passe trop court                                      |
 | 409  | `Email already used`                     | email déjà associé à un compte actif                                        |
 | 401  | `Invalid credentials`                    | email inconnu, mot de passe faux ou compte sans mot de passe |
+| 429  | `Too many attempts`                      | 5 échecs de connexion en 15 minutes pour cet email ; même le bon mot de passe est refusé pendant le blocage. L'en-tête `Retry-After` donne le nombre de secondes à attendre |
 
 ---
 ## Inscription d'un candidat déjà enregistré sans compte
@@ -865,6 +867,19 @@ Lorsqu'un email existe déjà dans `people` et que son `password_hash` est vide,
 | 202 | `Verification required` | Demande de vérification prise en compte |
 | 409 | `Email already used` | L'adresse correspond déjà à un compte actif |
 | 401 | `Login required` | Accès aux candidatures sans session valide |
+
+Le 202 n'est pas une erreur : son corps est `{"message": "Verification required"}`. Le jeton n'apparaît jamais dans une réponse : il part uniquement dans le lien envoyé par email (`<APP_BASE_URL>/verification?token=…`), ou dans le terminal de l'API si `MAIL_ENABLED` vaut `0`. La fiche `people` n'est pas modifiée tant que le lien n'a pas été ouvert. Une nouvelle demande remplace la précédente.
+
+### Confirmation : `POST /api/auth/verify`
+
+Corps : `{"token": "<jeton reçu dans le lien>"}`. Le lien est valable **24 heures** et ne sert qu'**une fois**.
+
+| Code | Réponse | Cas |
+| --- | --- | --- |
+| 200 | la fiche (`id`, `first_name`, `last_name`, `email`, `phone`, `role`) | adresse confirmée : le nom, le prénom, le téléphone et le mot de passe choisis à l'inscription sont posés. Aucune session n'est ouverte : la personne se connecte ensuite avec `POST /api/auth/login` |
+| 400 | `Invalid field: token` | jeton absent, vide ou non textuel |
+| 400 | `Invalid value` | jeton inconnu, déjà utilisé ou expiré (même réponse dans les trois cas) |
+| 409 | `Email already used` | la fiche a reçu un compte entre-temps : le lien ne remplace jamais un mot de passe existant |
 
 # Authentification et autorisations
 
@@ -941,6 +956,8 @@ avec le code **409**.
 
 - `companies` reçoit `siren` (chaîne de 9 chiffres, unique, obligatoire à la création) : voir [SIREN](#siren).
 - Script `migrate_siren.py` pour ajouter le SIREN à une base existante sans la réinitialiser.
+- `POST /api/auth/login` : 429 `Too many attempts` avec `Retry-After` après 5 échecs en 15 minutes.
+- `POST /api/auth/register` répond 202 pour un email déjà dans `people` sans mot de passe ; nouvelle route `POST /api/auth/verify` et table `pending_registrations`.
 
 ---
 
