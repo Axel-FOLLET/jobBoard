@@ -1,6 +1,9 @@
 import sqlite3
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
+
+import pending_registrations
+from mailer import send_verification_link
 from auth_utils import (
     create_person,
     current_user,
@@ -35,6 +38,39 @@ def register():
 
     email = data["email"].strip().lower()
     conn = get_db()
+
+    # Adresse déjà dans people, mais sans mot de passe : la personne existe (elle a candidaté
+    # sans compte, ou une entreprise l'a saisie) et n'a jamais eu de compte. Sa fiche n'est pas
+    # modifiée ici : l'inscription attend le lien envoyé à cette adresse, sinon connaître un
+    # email suffirait à prendre la main sur ses candidatures.
+    existing = conn.execute(
+        """
+        SELECT id, password_hash
+        FROM people
+        WHERE email = ?
+        """,
+        (email,),
+    ).fetchone()
+
+    if existing is not None and not existing["password_hash"]:
+        first_name = data["first_name"].strip()
+
+        token = pending_registrations.create(
+            conn,
+            existing["id"],
+            first_name,
+            data["last_name"].strip(),
+            (data.get("phone") or "").strip() or None,
+            generate_password_hash(password),
+        )
+
+        conn.close()
+
+        # Le jeton part par email, et dans le journal du serveur si l'envoi est désactivé.
+        # Il ne figure jamais dans la réponse, qui est la même pour tout le monde.
+        send_verification_link(email, first_name, token)
+
+        return jsonify({"message": "Verification required"}), 202
 
     try:
         person_id = create_person(

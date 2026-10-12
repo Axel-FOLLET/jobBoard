@@ -1,7 +1,10 @@
+// Formulaire de candidature à une annonce, ouvert depuis sa carte.
 import { useContext, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { AuthContext } from '../AuthContext'
+import { apiFetch } from '../api.js'
 
+// Nom de chaque champ de l'API, en français, pour le message « Il manque un champ ».
 const FIELD_NAMES = {
     first_name: 'prénom',
     last_name: 'nom',
@@ -10,12 +13,14 @@ const FIELD_NAMES = {
 }
 
 export default function Form({ id, onClose }) {
+    // Un visiteur saisit son identité ; une personne connectée ne remplit que le message.
     const { user } = useContext(AuthContext)
     const [firstName, setFirstName] = useState('')
     const [surname, setSurname] = useState('')
     const [telephone, setTelephone] = useState('')
     const [email, setEmail] = useState('')
     const [message, setMessage] = useState('')
+    // errors = un message par champ fautif ; status pilote le bouton : idle, sending, sent, error.
     const [errors, setErrors] = useState({})
     const [status, setStatus] = useState('idle')
     const [sendError, setSendError] = useState('')
@@ -30,6 +35,7 @@ export default function Form({ id, onClose }) {
 
     const handleSubmit = async (event) => {
         event.preventDefault()
+        // Double clic ou renvoi pendant l'attente : on ignore.
         if (status === 'sending' || status === 'sent') return
 
         setSendError('')
@@ -61,10 +67,12 @@ export default function Form({ id, onClose }) {
             }
         }
 
+        // Message obligatoire pour tout le monde.
         if (message.trim() === '') {
             newErrors.message = 'Veuillez indiquer votre message.'
         }
 
+        // Au moins une erreur de saisie : rien n'est envoyé au serveur.
         setErrors(newErrors)
         if (Object.keys(newErrors).length > 0) return
 
@@ -83,47 +91,47 @@ export default function Form({ id, onClose }) {
         setStatus('sending')
 
         try {
-            const response = await fetch(`/api/ads/${id}/applications`, {
+            const { status: httpStatus, error: apiError } = await apiFetch(`/api/ads/${id}/applications`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+                body,
             })
 
-            if (response.status === 201) {
+            // 201 : candidature enregistrée, l'effet plus haut referme le formulaire.
+            if (httpStatus === 201) {
                 setStatus('sent')
                 return
             }
 
-            const data = await response.json()
-            console.error(response.status, data.error)
+            // Refus de l'API : le détail technique va dans la console, le candidat lit un message en français.
+            console.error(httpStatus, apiError)
             setStatus('error')
 
-            if (
-                response.status === 400 &&
-                typeof data.error === 'string' &&
-                data.error.startsWith('Missing field: ')
-            ) {
-                const field = data.error.replace('Missing field: ', '')
+            // Un message français par cas : champ manquant, candidature en double, annonce clôturée, compte existant.
+            if (httpStatus === 400 && apiError.startsWith('Missing field: ')) {
+                const field = apiError.replace('Missing field: ', '')
                 setSendError(`Il manque un champ : ${FIELD_NAMES[field] || field}.`)
-            } else if (response.status === 409 && data.error === 'Already applied') {
+            } else if (httpStatus === 409 && apiError === 'Already applied') {
                 setSendError('Vous avez déjà candidaté à cette annonce.')
-            } else if (response.status === 409 && data.error === 'Ad is closed') {
+            } else if (httpStatus === 409 && apiError === 'Ad is closed') {
                 setSendError('Cette annonce est clôturée : les candidatures ne sont plus possibles.')
-            } else if (response.status === 401) {
+            } else if (httpStatus === 401) {
                 setSendError('Cet email correspond à un compte. Connectez-vous pour candidater.')
                 setNeedLogin(true)
             } else {
-                throw new Error(`Unexpected response ${response.status}`)
+                throw new Error(`Unexpected response ${httpStatus}`)
             }
         } catch (err) {
+            // Serveur arrêté, réponse illisible ou code inattendu.
             console.error(err)
             setStatus('error')
             setSendError("Nous n'arrivons pas à envoyer votre candidature pour le moment. Merci de réessayer dans quelques instants.")
         }
     }
 
+    // noValidate : les messages du navigateur sont remplacés par les nôtres, en français.
     return (
         <form onSubmit={handleSubmit} noValidate>
+            {/* Connecté : l'identité vient de la session, seuls les visiteurs voient ces champs. */}
             {user ? (
                 <p>Vous candidatez en tant que {user.first_name} {user.last_name}.</p>
             ) : (
@@ -165,6 +173,7 @@ export default function Form({ id, onClose }) {
             </label>
             {errors.message && <p>{errors.message}</p>}
 
+            {/* Bouton verrouillé pendant l'envoi : spinner, puis coche avant la fermeture. */}
             <button type="submit" disabled={status === 'sending' || status === 'sent'}>
                 {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
                 {status === 'sent' ? (
@@ -178,6 +187,7 @@ export default function Form({ id, onClose }) {
                 ) : status === 'sending' ? 'Envoi en cours…' : 'Envoyer'}
             </button>
 
+            {/* aria-live : un lecteur d'écran annonce le résultat sans action de l'utilisateur. */}
             <div aria-live="polite">
                 {status === 'sent' && (
                     <p className="visually-hidden">Votre candidature est envoyée.</p>
