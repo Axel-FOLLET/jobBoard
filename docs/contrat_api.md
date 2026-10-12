@@ -772,7 +772,8 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `POST /api/auth/register` | 201 : compte créé ; 202 : vérification de l’email en attente | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
-| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials`                                       |
+| `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials` ; 429 `Too many attempts` (en-tête `Retry-After`) |
+| `POST /api/auth/verify`   | 200 : la fiche, compte activé (pas de session ouverte) | 400 `Invalid field: token` ou `Invalid value` ; 409 `Email already used`             |
 
 ## Corps des requêtes
 
@@ -846,6 +847,7 @@ Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
 | 400  | `Password must be at least 8 characters` | mot de passe trop court                                      |
 | 409  | `Email already used`                     | email déjà associé à un compte actif                                        |
 | 401  | `Invalid credentials`                    | email inconnu, mot de passe faux ou compte sans mot de passe |
+| 429  | `Too many attempts`                      | 5 échecs de connexion en 15 minutes pour cet email ; même le bon mot de passe est refusé pendant le blocage. L'en-tête `Retry-After` donne le nombre de secondes à attendre |
 
 ---
 ## Inscription d'un candidat déjà enregistré sans compte
@@ -865,6 +867,19 @@ Lorsqu'un email existe déjà dans `people` et que son `password_hash` est vide,
 | 202 | `Verification required` | Demande de vérification prise en compte |
 | 409 | `Email already used` | L'adresse correspond déjà à un compte actif |
 | 401 | `Login required` | Accès aux candidatures sans session valide |
+
+Le 202 n'est pas une erreur : son corps est `{"message": "Verification required"}`. Le jeton n'apparaît jamais dans une réponse : il part uniquement dans le lien envoyé par email (`<APP_BASE_URL>/verification?token=…`), ou dans le terminal de l'API si `MAIL_ENABLED` vaut `0`. La fiche `people` n'est pas modifiée tant que le lien n'a pas été ouvert. Une nouvelle demande remplace la précédente.
+
+### Confirmation : `POST /api/auth/verify`
+
+Corps : `{"token": "<jeton reçu dans le lien>"}`. Le lien est valable **24 heures** et ne sert qu'**une fois**.
+
+| Code | Réponse | Cas |
+| --- | --- | --- |
+| 200 | la fiche (`id`, `first_name`, `last_name`, `email`, `phone`, `role`) | adresse confirmée : le nom, le prénom, le téléphone et le mot de passe choisis à l'inscription sont posés. Aucune session n'est ouverte : la personne se connecte ensuite avec `POST /api/auth/login` |
+| 400 | `Invalid field: token` | jeton absent, vide ou non textuel |
+| 400 | `Invalid value` | jeton inconnu, déjà utilisé ou expiré (même réponse dans les trois cas) |
+| 409 | `Email already used` | la fiche a reçu un compte entre-temps : le lien ne remplace jamais un mot de passe existant |
 
 # Authentification et autorisations
 
@@ -914,6 +929,7 @@ L'accès aux routes d'administration, à la création d'annonces (`POST /api/ads
 | `POST /api/ads/<id>/closure`        | `@admin_required` |
 | `GET/POST/PATCH/DELETE /api/admin/…`| `@admin_required` |
 | `GET /api/me/applications`          | `@login_required` |
+| `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads` | vérification du recruteur (voir [Espace recruteur](#espace-recruteur)) |
 
 ---
 
@@ -937,10 +953,120 @@ avec le code **409**.
 
 ---
 
+# Espace recruteur
+
+Ajouté au J7. Un **recruteur** est une personne connectée dont la fiche `people` a un `company_id` : elle gère cette entreprise et ses annonces, et rien d'autre.
+
+## Base de données
+
+`people` reçoit une colonne facultative :
+
+```sql
+company_id INTEGER REFERENCES companies(id) ON DELETE RESTRICT
+```
+
+- `NULL` (cas par défaut) : la personne n'est pas recruteur.
+- Elle est renseignée par l'administrateur, avec le CRUD de `people` : `company_id` s'ajoute aux champs disponibles et modifiables de `people`. Une entreprise inconnue renvoie 400 `Unknown reference`.
+- L'inscription (`POST /api/auth/register`) et `PATCH /api/auth/me` ne la lisent jamais : personne ne peut se déclarer recruteur soi-même.
+- Le remplissage (`seed_data.py`) rattache chaque contact des annonces à l'entreprise de ces annonces.
+
+## Vérification du recruteur
+
+Appliquée à toutes les routes `/api/recruiter/…`, dans `routes/recruiter.py` :
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 401 | `Login required` | pas de session |
+| 403 | `Recruiter only` | personne connectée sans `company_id` (un administrateur sans entreprise reçoit aussi 403) |
+
+L'entreprise utilisée est **toujours** celle de la fiche de la personne connectée : aucune route ne lit un `company_id` envoyé par le client.
+
+## Routes
+
+| Route | Succès | Erreurs |
+| --- | --- | --- |
+| `GET /api/categories` (publique) | 200 : `[{"id": 1, "name": "Développement"}]`, par ordre alphabétique | — |
+| `GET /api/recruiter/company` | 200 : l'entreprise | 401, 403 |
+| `PATCH /api/recruiter/company` | 200 : l'entreprise modifiée | 401, 403, 400 (voir ci-dessous) |
+| `GET /api/recruiter/ads` | 200 : toutes les annonces de l'entreprise, ouvertes et fermées, de la plus récente à la plus ancienne (`[]` possible) | 401, 403 |
+| `POST /api/recruiter/ads` | 201 : l'annonce créée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 400 (voir ci-dessous) |
+
+### `GET /api/recruiter/company`
+
+```json
+{
+  "id": 2,
+  "name": "Orvelune",
+  "description": "…",
+  "location": "Lyon",
+  "website": "https://orvelune.example",
+  "siren": "936442573"
+}
+```
+
+### `PATCH /api/recruiter/company`
+
+Champs modifiables : `name`, `description`, `location`, `website`. Le `siren` n'est **pas** modifiable par le recruteur : il identifie l'entreprise, seul l'administrateur le change.
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 400 | `No fields to update` | corps vide |
+| 400 | `Unknown field: <nom>` | champ hors de la liste, `siren` et `id` compris |
+| 400 | `Missing field: name` | `name` vide ou composé d'espaces |
+
+### `GET /api/recruiter/ads`
+
+```json
+[
+  {
+    "id": 12,
+    "title": "Développeur Python",
+    "short_description": "Back-end Flask",
+    "location": "Lyon",
+    "contract_type": "CDI",
+    "status": "open",
+    "created_at": "2026-10-09 14:12:00",
+    "applications_count": 3,
+    "oldest_unanswered_at": "2026-09-20 09:00:00"
+  }
+]
+```
+
+- `applications_count` : nombre total de candidatures reçues par l'annonce (0 possible).
+- `oldest_unanswered_at` : `created_at` de la plus ancienne candidature encore `pending` de l'annonce, `null` s'il n'y en a aucune.
+- Pas de pagination.
+
+### `POST /api/recruiter/ads`
+
+Mêmes champs que [`POST /api/ads`](#post-apiads), **sans** `company_id` ni `contact_id` : le serveur met l'entreprise du recruteur et le recruteur lui-même comme contact. Le `status` d'une nouvelle annonce est `open`.
+
+| Champ | Obligatoire | Remarque |
+| --- | --- | --- |
+| `title` | oui | |
+| `short_description` | oui | |
+| `category_id` | oui | doit exister (liste : `GET /api/categories`) |
+| `description`, `salary` (entier), `location`, `working_time`, `contract_type` | non | |
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 400 | `Missing field: <nom>` | `title`, `short_description` ou `category_id` absent ou vide |
+| 400 | `Unknown field: <nom>` | `company_id`, `contact_id` ou tout champ hors de la liste |
+| 400 | `Unknown category_id` | catégorie inexistante |
+
+---
+
+# Changements J7
+
+- Espace recruteur : colonne `people.company_id`, routes `GET /api/categories`, `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, erreur 403 `Recruiter only`.
+
+---
+
 # Changements J6
 
 - `companies` reçoit `siren` (chaîne de 9 chiffres, unique, obligatoire à la création) : voir [SIREN](#siren).
 - Script `migrate_siren.py` pour ajouter le SIREN à une base existante sans la réinitialiser.
+- `POST /api/auth/login` : 429 `Too many attempts` avec `Retry-After` après 5 échecs en 15 minutes.
+- `POST /api/auth/register` répond 202 pour un email déjà dans `people` sans mot de passe ; nouvelle route `POST /api/auth/verify` et table `pending_registrations`.
 
 ---
 

@@ -1,99 +1,444 @@
 /* données à l'intérieur de la page, pour que le contenu ne touche pas les bords de l'écran */
 .page {
-  max-width: 720px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 16px;
+  padding: 32px 24px;
 }
 
+/* Inclure bordures et espacements dans la largeur de chaque élément. */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Éviter les débordements des textes longs. */
+.page, .applications-page, .job-offer { min-width: 0; overflow-wrap: anywhere; }
+
+/* Hiérarchie des titres des pages. */
+h1, h2, h3 { color: #1D1D1F; line-height: 1.2; letter-spacing: -0.02em; font-weight: 600; }
+
+/* Liens dans les textes. */
+.page a, .applications-page a { color: #2E6DA4; text-underline-offset: 3px; }
+
+/* Boutons communs du site. */
+button { font: inherit; font-weight: 500; color: #1D1D1F; background: #A9CCE3; border: 1px solid transparent; border-radius: 6px; padding: 10px 18px; cursor: pointer; transition: background-color .2s, transform .2s; }
+
+/* Survol des boutons disponibles. */
+button:hover:not(:disabled) { background-color: #8FBBD8; }
+
+/* Léger enfoncement au clic. */
+button:active:not(:disabled) { transform: translateY(1px); }
+
+/* Aspect des actions indisponibles. */
+button:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Repère clavier commun, avec halo baby blue. */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, .table-scroll:focus-visible { outline: 2px solid #1D1D1F; outline-offset: 3px; box-shadow: 0 0 0 5px rgb(169 204 227 / 35%); }
+
+/* Présentation commune des formulaires. */
+form { display: flex; flex-direction: column; gap: 16px; background: #FFF; border: 1px solid rgb(29 29 31 / 10%); border-radius: 10px; padding: 28px; }
+
+/* Libellés au-dessus des champs. */
+form label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 500; }
+
+/* Champs de saisie et listes déroulantes. */
+input, textarea, select { width: 100%; min-width: 0; font: inherit; color: #1D1D1F; background: #FFF; border: 1px solid rgb(29 29 31 / 25%); border-radius: 6px; padding: 11px 12px; }
+
+/* Zone de message redimensionnable verticalement. */
+textarea { min-height: 140px; resize: vertical; }
+
+/* Champ temporairement verrouillé. */
+input:disabled, textarea:disabled, select:disabled { background: #F4F4F5; color: #6E6E73; }
+
+/* Messages de validation dans les formulaires. */
+form label + p, form div > input + p, form [role="alert"] { color: #9B3038; font-size: 14px; margin: 0; }
+
+/* Résultat de l'envoi annoncé dans le formulaire. */
+form [aria-live] p:not(.visually-hidden) { margin: 0; }
+
+/* Largeur confortable pour la connexion et le compte. */
+.account-page { max-width: 560px; padding-top: 56px; }
+
+/* Formulaire d'inscription autonome dans la page actuelle. */
+.registration-form { width: calc(100% - 32px); max-width: 512px; margin: 56px auto; }
+
+/* Encadré de l'accueil : la recherche, puis les offres récentes, dans une même case blanche. */
+.home-panel { max-width: 880px; margin: 0 auto 64px; padding: 32px; background-color: #FFFFFF; border: 1px solid rgb(29 29 31 / 10%); border-radius: 14px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+
+/* Barre de recherche de l'accueil : étiquette au-dessus, cadre de saisie en dessous. */
+.home-search { margin: 0 0 32px; }
+.home-search label { display: block; margin-bottom: 8px; }
+
+/* Cadre de saisie : il contient le champ et la flèche, et sa hauteur suit celle du texte. */
+.home-search-box { display: flex; align-items: flex-end; gap: 8px; padding: 3px 3px 3px 10px; background: #FFF; border: 1px solid rgb(29 29 31 / 25%); border-radius: 10px; }
+/* Le champ n'a plus de cadre à lui : il démarre à une ligne, grandit ligne par ligne, puis défile au-delà de six.
+   min-height remet à zéro les 140 px imposés plus haut à tous les textarea, sinon il démarrerait à cette hauteur. */
+.home-search-box textarea { flex: 1 1 auto; min-width: 0; min-height: 0; height: 40px; padding: 8px 0; background: transparent; border: 0; border-radius: 0; line-height: 1.5; resize: none; overflow-y: auto; max-height: 180px; }
+/* Le contour de focus est porté par le cadre entier, pas par le champ seul. */
+.home-search-box textarea:focus-visible { outline: none; box-shadow: none; }
+.home-search-box:focus-within { border-color: #1D1D1F; box-shadow: 0 0 0 4px rgb(169 204 227 / 35%); }
+/* Flèche carrée posée au bas du cadre, pour pousser la recherche. */
+.home-search-submit { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; }
+
+/* Lien d'appel à l'action présenté comme un bouton, sans soulignement. */
+a.button-link { display: inline-flex; align-items: center; justify-content: center; font-weight: 500; color: #1D1D1F; background: #A9CCE3; border: 1px solid transparent; border-radius: 6px; padding: 10px 18px; text-decoration: none; transition: background-color .2s, transform .2s; }
+a.button-link:hover { background: #8FBBD8; }
+a.button-link:active { transform: translateY(1px); }
+
+/* Case des offres récentes de l'accueil, sous la barre de recherche. */
+.recent-offers { margin: 0; }
+.recent-offers .offers-grid { padding-bottom: 16px; }
+
+/* Grille responsive des offres. */
+.offers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); align-items: start; gap: 32px; padding-bottom: 48px; }
+
+/* Liste des candidatures centrée comme les autres pages. */
+.applications-page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+/* Grille sans puces pour les candidatures. */
+.applications-page ul { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 24px; }
+
+/* Carte d'une candidature. */
+.applications-page li { background: #FFF; border: 1px solid rgb(29 29 31 / 10%); border-radius: 10px; padding: 28px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+
+/* Informations secondaires des candidatures. */
+.applications-page li p { color: #6E6E73; font-size: 14px; }
+
+/* Statut neutre : le texte reste toujours visible. */
+.applications-page .application-status { display: inline-block; padding: 4px 10px; border-radius: 6px; color: #1D1D1F; background: #F0F1F2; font-weight: 500; }
+
+/* Statut d'une candidature retenue. */
+.applications-page .status-accepted { color: #246044; background: #EAF4EE; }
+
+/* Statut d'une candidature refusée. */
+.applications-page .status-rejected { color: #9B3038; background: #FAECEE; }
+
+/* Liens du menu regroupés sur ordinateur. */
+.nav-links { display: flex; align-items: center; gap: 24px; }
+
+/* Bouton du menu réservé aux petits écrans. */
+nav .menu-toggle { display: none; }
+
+/* Choix des tables d'administration. */
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
+
+/* Table non sélectionnée. */
+.admin-tabs button[aria-pressed="false"] { background: #FFF; border-color: rgb(29 29 31 / 15%); }
+
+/* Pagination et taille de page sur une même ligne. */
+.admin-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; margin: 20px 0; }
+
+/* Libellé discret du nombre de lignes. */
+.admin-pagination label { display: flex; align-items: center; gap: 12px; color: #6E6E73; font-size: 14px; }
+
+/* Liste de pagination de largeur naturelle. */
+.admin-pagination select { width: auto; }
+
+/* Boutons et compteur de pagination. */
+.pagination-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+/* Espace autour de l'ajout d'une ligne. */
+.admin-add { margin: 20px 0; }
+
+/* Défilement local du tableau, sans élargir la page. */
+.table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid rgb(29 29 31 / 10%); border-radius: 10px; background: #FFF; }
+
+/* Tableau de données aux bordures partagées. */
+.admin-page table { width: 100%; border-collapse: collapse; font-size: 14px; }
+
+/* Cellules lisibles et alignées en haut. */
+.admin-page th, .admin-page td { min-width: 120px; max-width: 320px; padding: 16px; text-align: left; vertical-align: top; border-bottom: 1px solid rgb(29 29 31 / 10%); overflow-wrap: anywhere; }
+
+/* En-têtes du tableau. */
+.admin-page th { background: #F0F5F8; font-weight: 600; }
+
+/* Garder les libellés des actions du tableau sur une ligne. */
+.admin-page td button { white-space: nowrap; }
+
+/* Repère discret lors du survol d'une ligne. */
+.admin-page tbody tr:hover { background: #FBF8F2; }
+
+/* Formulaire d'administration adaptable à la largeur disponible. */
+.admin-page form { margin: 20px 0; min-width: min(480px, 100%); }
+
+/* Action de suppression différenciée par son texte et sa couleur. */
+.admin-page .button-danger { color: #9B3038; background: #FAECEE; border-color: #EBCDD1; }
+
+/* Survol du bouton de suppression. */
+.admin-page .button-danger:hover { background: #F4DDE1; }
+
+/* Adaptation du menu, des marges et de la pagination au téléphone. */
+@media (max-width: 900px) {
+  /* Afficher la commande du menu mobile. */
+  nav .menu-toggle { display: inline-block; }
+  /* Masquer les liens fermés, y compris pour le clavier. */
+  .nav-links { display: none; width: 100%; flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 0; }
+  /* Ouvrir le menu à la demande. */
+  .nav-links.is-open { display: flex; }
+  /* Agrandir la surface des liens mobiles. */
+  .nav-links a { padding: 10px 0; }
+}
+
+/* Adaptation des contenus aux écrans étroits. */
+@media (max-width: 600px) {
+  /* Marges des pages sur téléphone. */
+  .page, .applications-page { padding: 24px 16px; }
+  /* Réduire les espacements entre cartes. */
+  .offers-grid { gap: 20px; }
+  /* Formulaires moins espacés sur téléphone. */
+  form { padding: 20px; }
+  /* Sélecteur au-dessus des boutons de pagination. */
+  .admin-pagination { flex-direction: column; align-items: flex-start; }
+}
+
+/* Grand titre : même largeur que l'encadré, donc son texte démarre au bord gauche de la case. */
+.home-title {
+  max-width: 880px;
+  margin: 64px auto 32px;
+  text-align: left;
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+/* Mot du titre avec le dégradé baby blue validé. */
+.gradient {
+  background: linear-gradient(90deg, #5A93BF, #A9CCE3);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Carte d'offre blanche, avec bordure et ombre discrètes. */
 .job-offer {
-    background-color: #FFFFFF;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background-color: #FFFFFF;
+  border-radius: 10px;
+  padding: 28px;
+  margin-bottom: 0;
+  border: 1px solid rgb(29 29 31 / 10%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
+/* Nom de l'entreprise dans la carte. */
 .job-offer h2 {
-    font-size: 1.5rem;
-    margin-bottom: 8px;
+  font-size: 14px;
+  color: #6E6E73;
+  margin: 0 0 8px;
 }
 
+/* Texte secondaire des offres. */
 .job-offer p {
-    margin: 4px 0;
-    color: #6E6E73
+  margin: 4px 0;
+  color: #6E6E73
 }
 
+/* Titre du poste placé au premier niveau visuel. */
+.job-offer h2 + p { font-size: 20px; font-weight: 600; color: #1D1D1F; margin-bottom: 12px; }
+
+/* Boutons de détail et candidature côte à côte, avec retour à la ligne. */
+.offer-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+
+/* Bouton de détail transparent à fine bordure. */
+.job-offer .button-secondary { background: transparent; border: 1px solid rgb(29 29 31 / 25%); }
+
+/* Formulaire ouvert dans une carte d'offre. */
+.job-offer form { margin-top: 24px; padding: 20px; background: #FBF8F2; }
+
+/* Messages de validation des cartes. */
+.job-offer form label + p, .job-offer form [role="alert"] { color: #9B3038; font-size: 14px; }
+
+/* Conserver les retours à la ligne des descriptions. */
+.description {
+  white-space: pre-line;
+}
+
+/* Boutons principaux des offres. */
 .job-offer button {
-    background-color: #A9CCE3;
-    color: #1D1D1F;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-family: inherit;
-    font-weight: 500;
-    cursor: pointer;
+  background-color: #A9CCE3;
+  color: #1D1D1F;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
 }
 
-.job-offer button:hover {
-    background-color: #8FBBD8;
+/* Survol des boutons des offres disponibles. */
+.job-offer button:hover:not(:disabled) {
+  background-color: #8FBBD8;
 }
 
+/* Focus clavier des boutons des offres. */
 .job-offer button:focus-visible {
-    outline: 2px solid #1D1D1F;
-    outline-offset: 3px;
+  outline: 2px solid #1D1D1F;
+  outline-offset: 3px;
 }
 
+/* En-tête fixe translucide. */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(251 248 242 / 60%);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgb(29 29 31 / 10%);
+}
+
+/* Barre de navigation centrée. */
 nav {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  max-width: 1100px;
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 0 24px;
 }
 
+/* Logo semi-gras, séparé des liens par l'espace disponible. */
+.logo {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+/* Seul le o du logo porte la couleur baby blue. */
+.logo-o {
+  color: #A9CCE3;
+}
+
+/* Liens sobres de la navigation. */
+nav a {
+  color: #1D1D1F;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+/* Survol des liens du menu. */
+nav a:hover {
+  color: #2E6DA4;
+}
+
+/* Focus clavier des liens du menu. */
+nav a:focus-visible {
+  outline: 2px solid #1D1D1F;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Page active soulignée et renforcée. */
 nav a.active {
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 6px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 6px;
 }
 
+/* Onglets des espaces recruteur et candidat : pastilles reprenant le choix des tables d'administration. */
+.tab-switch { display: flex; flex-wrap: wrap; gap: 10px; max-width: none; min-height: 0; margin: 0 0 28px; padding: 0; }
+.tab-switch a { font-size: 15px; font-weight: 500; color: #1D1D1F; background: #FFF; border: 1px solid rgb(29 29 31 / 15%); border-radius: 6px; padding: 10px 18px; text-decoration: none; transition: background-color .2s, transform .2s; }
+.tab-switch a:hover { color: #1D1D1F; background: #F0F5F8; }
+.tab-switch a:active { transform: translateY(1px); }
+
+/* Onglet courant : le fond baby blue du bouton de table sélectionné, sans soulignement. */
+.tab-switch a.active { font-weight: 500; text-decoration: none; background: #A9CCE3; border-color: transparent; }
+
+/* Bouton secondaire de déconnexion et commande mobile. */
+nav button {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1D1D1F;
+  background: transparent;
+  border: 1px solid rgb(29 29 31 / 25%);
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+/* Survol des boutons du menu. */
+nav button:hover:not(:disabled) {
+  background-color: #A9CCE3;
+}
+
+/* Focus clavier des boutons du menu. */
+nav button:focus-visible {
+  outline: 2px solid #1D1D1F;
+  outline-offset: 3px;
+}
+
+/* Indicateur de chargement intégré aux boutons. */
 .spinner {
-    display: inline-block;
-    width: 1em;
-    height: 1em;
-    margin-right: 0.5em;
-    vertical-align: -0.15em;
-    border: 2px solid currentColor;
-    border-right-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.5em;
+  vertical-align: -0.15em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
+/* Rotation de l'indicateur de chargement. */
 @keyframes spin {
-    to { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
+/* Taille de la coche de confirmation. */
 .checkmark {
-    width: 3rem;
-    height: 3rem;
+  width: 1.4em;
+  height: 1.4em;
+  vertical-align: middle;
 }
 
+/* Texte accessible aux lecteurs d'écran sans affichage visuel. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Tracé progressif de la coche. */
 .checkmark path {
-    stroke-dasharray: 40;
-    stroke-dashoffset: 40;
-    animation: draw 0.6s ease-out forwards;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: draw 0.6s ease-out forwards;
 }
 
+/* Animation du tracé de confirmation. */
 @keyframes draw {
-    to { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 0; }
 }
 
+/* Respect de la préférence de réduction des animations. */
 @media (prefers-reduced-motion: reduce) {
-    .spinner,
-    .checkmark path {
-        animation: none;
-    }
+  /* Désactiver transitions et enfoncement des boutons. */
+  button { transition: none !important; transform: none !important; }
+  /* Figer les indicateurs de chargement et de confirmation. */
+  .spinner,
+  .checkmark path { animation: none; }
+  /* Afficher la coche déjà tracée. */
+  .checkmark path { stroke-dashoffset: 0; }
+}
 
-    .checkmark path {
-        stroke-dashoffset: 0;
-    }
+/* Marges mobiles après les styles généraux pour conserver leur priorité. */
+@media (max-width: 900px) {
+  /* Espacement de la barre mobile. */
+  nav { padding: 12px 16px; gap: 16px; }
+}
+
+/* Taille des cartes et du titre sur téléphone. */
+@media (max-width: 600px) {
+  /* Titre avec un espace réduit. */
+  .home-title { margin: 40px auto 24px; }
+  /* Encadré de l'accueil moins épais sur téléphone. */
+  .home-panel { padding: 20px; }
+  /* Cartes compactes. */
+  .job-offer { padding: 20px; }
 }

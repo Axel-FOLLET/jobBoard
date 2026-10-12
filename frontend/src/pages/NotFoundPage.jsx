@@ -1,3 +1,4 @@
+// Page affichée pour toute URL inconnue (route * dans App.jsx).
 export default function NotFoundPage() {
   return (
     <div className="page">

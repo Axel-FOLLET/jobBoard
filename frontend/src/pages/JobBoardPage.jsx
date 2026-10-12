@@ -1,51 +1,69 @@
 import JobOffer from '../components/AddJobOffer.jsx'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router'
+import { apiFetch } from '../api.js'
 
-// useState : la « mémoire » fournie par React (accolades = on prend cet outil précis)
+// Page d'accueil : liste les annonces publiées, récupérées depuis /api/ads.
 export default function JobBoardPage() {
-  const [offers, setOffers] = useState([]) // liste vide au départ
+  // Liste vide au départ, puis remplie par l'appel réseau ci-dessous.
+  const [offers, setOffers] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  // ?q=… vient de la barre de recherche de l'accueil ; le filtre q est géré par l'API.
+  const [searchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
 
-  // Une seule fois, au chargement de la page ([]) on définit l'état de la liste d'annonces
+  // À chaque changement de recherche : on redemande la liste à l'API.
   useEffect(() => {
     async function loadOffers() {
+      setLoading(true)
+      setError(null)
       try {
-        const response = await fetch('/api/ads')
-        if (!response.ok) {
-          throw new Error('Failed to fetch job offers')
+        const path = search === '' ? '/api/ads' : `/api/ads?q=${encodeURIComponent(search)}`
+        const { ok, data, error: apiError } = await apiFetch(path)
+        if (!ok) {
+          throw new Error(apiError)
         }
-        const data = await response.json()
         setOffers(data)
       } catch (err) {
-        console.error(err) // détail technique pour nous, dans la console (F12)
+        // Détail technique pour nous dans la console (F12), message lisible pour le visiteur.
+        console.error(err)
         setError("Nous n'arrivons pas à charger les offres pour le moment. Merci de réessayer dans quelques instants.")
       } finally {
+        // Dans tous les cas : on sort de l'état « chargement ».
         setLoading(false)
       }
     }
     loadOffers()
-  }, [])
+  }, [search])
 
-  // Affichage selon l'état : chargement, erreur, ou liste d'annonces
+  // Trois affichages possibles, dans cet ordre : chargement, erreur, puis la liste.
   if (loading) return <p>Chargement…</p>
   if (error) return <p>{error}</p>
 
-  // Affichage des cartes
   return (
     <div className="page">
-      <h1>Job Board</h1>
-      {/* Une carte par annonce ; key sert à React seul, d'où id en plus */}
-      {offers.map((offer) => (
-        <JobOffer
-          key={offer.id}
-          id={offer.id}
-          company={offer.company}
-          title={offer.title}
-          shortDescription={offer.short_description}
-          location={offer.location}
-        />
-      ))}
+      <h1 className="home-title">
+        Votre prochain <span className="gradient">emploi</span>,
+        <br />
+        simplement.
+      </h1>
+      {/* Recherche venue de l'accueil : on rappelle le texte cherché et le cas sans résultat. */}
+      {search !== '' && <p>Résultats pour « {search} » : {offers.length}</p>}
+      {offers.length === 0 && <p>Aucune offre ne correspond à cette recherche.</p>}
+      {/* Une carte par annonce ; key sert à React seul, d'où id en plus. */}
+      <div className="offers-grid">
+        {offers.map((offer) => (
+          <JobOffer
+            key={offer.id}
+            id={offer.id}
+            company={offer.company}
+            title={offer.title}
+            shortDescription={offer.short_description}
+            location={offer.location}
+          />
+        ))}
+      </div>
     </div>
   )
 }
