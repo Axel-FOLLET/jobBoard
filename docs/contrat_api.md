@@ -514,6 +514,7 @@ name
 description
 location
 website
+siren
 ```
 
 Champs modifiables :
@@ -523,13 +524,43 @@ name
 description
 location
 website
+siren
 ```
 
-Champ obligatoire à la création :
+Champs obligatoires à la création :
 
 ```text
 name
+siren
 ```
+
+### SIREN
+
+Le `siren` identifie une entreprise : **une entreprise n'a qu'une fiche**. Seul le format et l'unicité dans notre base sont contrôlés, pas la correspondance réelle auprès de l'INSEE.
+
+- **Chaîne de 9 chiffres** (`"012345678"`), jamais un nombre JSON : les zéros du début sont conservés.
+- Les espaces au début et à la fin sont retirés avant la validation.
+- Une ancienne fiche non renseignée a `"siren": null` (provisoire) ; elle reste lisible et peut recevoir un SIREN valide par `PATCH`.
+- `PATCH` sans `siren` : la valeur actuelle est conservée. `PATCH` avec le SIREN de la fiche elle-même : accepté (ce n'est pas un doublon).
+- Un SIREN déjà renseigné **ne peut pas être effacé** (`null`, `""` ou espaces → 400).
+- L'unicité est garantie par la base (index unique `companies_siren_unique`), y compris pour deux créations simultanées.
+
+Exemple de création :
+
+```json
+{
+  "name": "Orvelune",
+  "siren": "936442573"
+}
+```
+
+| Code | Message                 | Cas                                                                                   |
+| ---- | ----------------------- | ------------------------------------------------------------------------------------- |
+| 400  | `Missing field: siren`  | `siren` absent à la création, ou `null`, vide ou composé d'espaces (création ou `PATCH`) |
+| 400  | `Invalid value`         | `siren` qui n'est pas une chaîne (nombre JSON...), contient autre chose que des chiffres, ou n'a pas 9 chiffres |
+| 409  | `Already exists`        | SIREN déjà attribué à une autre fiche (la fiche n'est ni créée ni modifiée)            |
+
+Migration d'une base existante : `python migrate_siren.py [fichier.db]` ajoute la colonne (`NULL` pour les fiches existantes) et l'index unique, sans réinitialiser la base. Un deuxième lancement ne change rien.
 
 ---
 
@@ -740,7 +771,7 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST /api/auth/register` | 201 : le compte créé                               | 400 champ invalide ou mot de passe de moins de 8 caractères ; 409 email déjà utilisé |
+| `POST /api/auth/register` | 201 : compte créé ; 202 : vérification de l’email en attente | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
 | `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials`                                       |
 
 ## Corps des requêtes
@@ -813,10 +844,27 @@ Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
 | 400  | `Invalid field: <nom du champ>`          | champ absent, vide, non textuel, trop long, ou email sans `@` |
 | 400  | `JSON object expected`                   | corps de requête qui n'est pas un objet JSON                 |
 | 400  | `Password must be at least 8 characters` | mot de passe trop court                                      |
-| 409  | `Email already used`                     | email déjà enregistré                                        |
+| 409  | `Email already used`                     | email déjà associé à un compte actif                                        |
 | 401  | `Invalid credentials`                    | email inconnu, mot de passe faux ou compte sans mot de passe |
 
 ---
+## Inscription d'un candidat déjà enregistré sans compte
+
+Lorsqu'un email existe déjà dans `people` et que son `password_hash` est vide, le système doit distinguer ce candidat d'un utilisateur possédant déjà un compte.
+
+1. **Création en attente :** le système initialise une procédure d'inscription et envoie un lien de vérification à l'adresse email concernée. Le compte reste en attente tant que l'adresse n'est pas vérifiée.
+2. **Avant vérification :** l'utilisateur peut consulter l'état de sa procédure, mais ne peut pas accéder aux candidatures déjà rattachées à cette personne.
+3. **Après vérification :** le système confirme que l'utilisateur contrôle l'adresse email, lui permet de définir ou de finaliser son mot de passe et rattache le compte à la ligne `people` existante. Les candidatures déjà enregistrées restent associées à cette personne et deviennent accessibles après authentification.
+4. **Si l'utilisateur quitte la page :** la vérification reste obligatoire. La procédure peut être reprise ultérieurement avec le lien reçu par email ou une nouvelle demande de vérification.
+5. **Sécurité :** connaître une adresse email ou rester sur la page d'inscription ne suffit jamais à prendre le contrôle d'un compte ni à accéder aux candidatures d'une autre personne.
+
+### Codes de réponse
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 202 | `Verification required` | Demande de vérification prise en compte |
+| 409 | `Email already used` | L'adresse correspond déjà à un compte actif |
+| 401 | `Login required` | Accès aux candidatures sans session valide |
 
 # Authentification et autorisations
 
@@ -886,6 +934,13 @@ Dans ce cas, le CRUD retourne :
 ```
 
 avec le code **409**.
+
+---
+
+# Changements J6
+
+- `companies` reçoit `siren` (chaîne de 9 chiffres, unique, obligatoire à la création) : voir [SIREN](#siren).
+- Script `migrate_siren.py` pour ajouter le SIREN à une base existante sans la réinitialiser.
 
 ---
 
