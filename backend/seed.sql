@@ -1,8 +1,9 @@
 --Insertion des données dans les tableaux correspondants avec INSERT INTO
 
-INSERT INTO companies (name, description, location, website) VALUES
-  ('TechNova', 'Studio de développement web', 'Paris', 'https://technova.example.com'),
-  ('GreenWorks', 'Agence de design durable', 'Lyon', 'https://greenworks.example.com');
+-- SIREN fictifs : données de test uniquement, ce ne sont pas les SIREN d'entreprises réelles
+INSERT INTO companies (name, description, location, website, siren) VALUES
+  ('TechNova', 'Studio de développement web', 'Paris', 'https://technova.example.com', '000000991'),
+  ('GreenWorks', 'Agence de design durable', 'Lyon', 'https://greenworks.example.com', '000000993');
 
 INSERT INTO categories (name) VALUES
   ('Développement'),

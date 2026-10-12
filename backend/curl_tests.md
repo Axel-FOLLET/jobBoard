@@ -1561,3 +1561,198 @@ Connection: close
   }
 ]
 ```
+
+# Partie 3 : SIREN des entreprises
+
+# Test 1 : lecture d'une fiche avec son SIREN (attendu : 200, siren présent)
+
+```bash
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/1"
+```
+
+Code obtenu : 200
+
+```json
+{
+  "description": "Studio de développement web",
+  "id": 1,
+  "location": "Paris",
+  "name": "TechNova",
+  "siren": "000000991",
+  "website": "https://technova.example.com"
+}
+```
+
+# Test 2 : création correcte, espaces retirés (attendu : 201, siren "123456789")
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Test SA","siren":" 123456789 "}'
+```
+
+Code obtenu : 201
+
+```json
+{
+  "description": null,
+  "id": 13,
+  "location": null,
+  "name": "Test SA",
+  "siren": "123456789",
+  "website": null
+}
+```
+
+# Test 3 : SIREN absent, vide, espaces ou null (attendu : 400, Missing field: siren)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":""}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"   "}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":null}'
+```
+
+Code obtenu : 400 (les 4 cas)
+
+```json
+{ "error": "Missing field: siren" }
+```
+
+# Test 4 : format refusé (attendu : 400, Invalid value)
+
+```bash
+## nombre JSON (pas une chaîne)
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":123456780}'
+## lettres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"12345678A"}'
+## 8 chiffres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"12345678"}'
+## 10 chiffres
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"X","siren":"1234567890"}'
+```
+
+Code obtenu : 400 (les 4 cas)
+
+```json
+{ "error": "Invalid value" }
+```
+
+# Test 5 : SIREN commençant par zéro (attendu : 201, le zéro est conservé)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Zero SA","siren":"012345678"}'
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/14"
+sqlite3 jobboard.db "SELECT quote(siren), typeof(siren) FROM companies WHERE id = 14;"
+```
+
+Code obtenu : 201 puis 200
+
+```json
+{
+  "description": null,
+  "id": 14,
+  "location": null,
+  "name": "Zero SA",
+  "siren": "012345678",
+  "website": null
+}
+```
+
+En base : `'012345678'|text`
+
+# Test 6 : deux créations avec le même SIREN (attendu : 409, Already exists, pas de nouvelle fiche)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Zero SA","siren":"012345678"}'
+sqlite3 jobboard.db "SELECT quote(siren), typeof(siren) FROM companies WHERE name = 'Zero SA';"
+```
+
+Code obtenu : 409
+
+```json
+{ "error": "Already exists" }
+```
+
+Nombre de fiches avant / après : 14 / 14.
+
+# Test 7 : modification vers le SIREN d'une autre entreprise (attendu : 409, fiche inchangée)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Renommé","siren":"012345678"}'
+sqlite3 jobboard.db "SELECT name, siren FROM companies WHERE id = 13;"
+```
+
+Code obtenu : 409
+
+```json
+{ "error": "Already exists" }
+```
+
+Fiche inchangée : `Test SA|123456789` (le nom n'a pas été modifié non plus).
+
+# Test 10 : modification qui garde son propre SIREN (attendu : 200)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":"123456789","location":"Paris"}'
+```
+
+Code obtenu : 200
+
+```json
+{
+  "description": null,
+  "id": 13,
+  "location": "Paris",
+  "name": "Test SA",
+  "siren": "123456789",
+  "website": null
+}
+```
+
+# Test 11 : modification sans siren, puis tentative d'effacement (attendu : 200 SIREN conservé, puis 400)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"website":"https://test.example.com"}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":null}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/13" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":""}'
+```
+
+Code obtenu : 200, puis 400 et 400
+
+```json
+{"description":null,"id":13,"location":"Paris","name":"Test SA","siren":"123456789","website":"https://test.example.com"}
+{"error":"Missing field: siren"}
+{"error":"Missing field: siren"}
+```
+
+# Test 12 : ancienne fiche sans SIREN, lisible puis complétée (attendu : 200 avec null, puis 200 avec le SIREN)
+
+```bash
+sqlite3 jobboard.db "INSERT INTO companies (name) VALUES ('Ancienne');"
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/companies/15"
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/companies/15" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"siren":"555555555"}'
+```
+
+Code obtenu : 200 puis 200
+
+```json
+{"description":null,"id":15,"location":null,"name":"Ancienne","siren":null,"website":null}
+{"description":null,"id":15,"location":null,"name":"Ancienne","siren":"555555555","website":null}
+```
+
+# Test 13 : protections et autres tables inchangées (attendu : 401, 403, 201, 400)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -d '{"name":"X","siren":"111111111"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/companies" -H "Content-Type: application/json" -b cookies_bob.txt -d '{"name":"X","siren":"111111111"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/categories" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"Nouvelle"}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/categories" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"name":"N2","siren":"111111111"}'
+```
+
+Code obtenu : 401, 403, 201, 400
+
+```json
+{"error":"Login required"}
+{"error":"Admin only"}
+{"id":7,"name":"Nouvelle"}
+{"error":"Unknown field: siren"}
+```

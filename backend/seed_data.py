@@ -1,4 +1,6 @@
 import json
+import re
+import sqlite3
 import sys
 
 from db import get_db
@@ -10,119 +12,164 @@ TABLES = ("companies", "categories", "people", "ads", "applications")
 with open(DATA_FILE, encoding="utf-8") as f:
     data = json.load(f)
 
+# --------------------------------------------------
+# 0. SIREN du fichier : texte de 9 chiffres, sans doublon
+#    (vérifié avant d'ouvrir la base : en cas d'erreur, rien n'est inséré)
+# --------------------------------------------------
+seen_sirens = set()
+
+for company in data["companies"]:
+    siren = company.get("siren")
+
+    if siren is None:
+        continue  # SIREN absent : l'entreprise sera retrouvée par son nom
+
+    if not isinstance(siren, str) or not re.fullmatch(r"[0-9]{9}", siren.strip()):
+        sys.exit(
+            f"SIREN invalide pour {company['name']} : {siren!r} "
+            "(attendu : une chaîne de 9 chiffres). À signaler à Axel."
+        )
+
+    siren = siren.strip()
+    if siren in seen_sirens:
+        sys.exit(f"SIREN en double dans le fichier : {siren}. À signaler à Axel.")
+
+    seen_sirens.add(siren)
+    company["siren"] = siren
+
 conn = get_db()
 
 # --------------------------------------------------
-# 0. Deuxième lancement : on s'arrête sans rien insérer
+# 0 bis. Deuxième lancement : on s'arrête sans rien insérer
+#        Une entreprise est retrouvée par son SIREN s'il est présent, sinon par son nom.
 # --------------------------------------------------
-names = [company["name"] for company in data["companies"]]
-placeholders = ", ".join("?" for _ in names)  # "?, ?, ?, ..." (un ? par nom)
+already = []
 
-already = conn.execute(
-    f"SELECT COUNT(*) FROM companies WHERE name IN ({placeholders})",
-    names,
-).fetchone()[0]
+for company in data["companies"]:
+    if company.get("siren") is not None:
+        row = conn.execute(
+            "SELECT id FROM companies WHERE siren = ?",
+            (company["siren"],),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM companies WHERE name = ?",
+            (company["name"],),
+        ).fetchone()
 
-if already > 0:
+    if row is not None:
+        already.append(company["name"])
+
+if already:
     conn.close()
     sys.exit(
-        f"Base déjà remplie : {already} entreprise(s) du fichier existe(nt) déjà. "
+        f"Base déjà remplie : {len(already)} entreprise(s) du fichier existe(nt) déjà "
+        f"({', '.join(already)}). Rien n'a été inséré. "
         "Relance python init_db.py avant python seed_data.py."
     )
 
-# --------------------------------------------------
-# 1. Entreprises : insérer et garder nom -> id
-# --------------------------------------------------
-company_ids = {}
+try:
+    # --------------------------------------------------
+    # 1. Entreprises : insérer et garder nom -> id
+    #    (les annonces du fichier désignent toujours l'entreprise par son nom)
+    # --------------------------------------------------
+    company_ids = {}
 
-for company in data["companies"]:
-    cur = conn.execute(
-        """INSERT INTO companies (name, description, location, website)
-           VALUES (?, ?, ?, ?)""",
-        (
-            company["name"],
-            company.get("description"),
-            company.get("location"),
-            company.get("website"),
-        ),
-    )
-    # lastrowid : l'id que la base vient d'attribuer à cette entreprise
-    company_ids[company["name"]] = cur.lastrowid
-
-# --------------------------------------------------
-# 2. Catégories : chercher d'abord (name est UNIQUE), insérer si absente
-# --------------------------------------------------
-category_ids = {}
-
-for category in data["categories"]:
-    row = conn.execute(
-        "SELECT id FROM categories WHERE name = ?",
-        (category["name"],),
-    ).fetchone()
-
-    if row is not None:
-        # déjà dans seed.sql (Développement, Design, Data) : on reprend son id
-        category_ids[category["name"]] = row["id"]
-    else:
+    for company in data["companies"]:
         cur = conn.execute(
-            "INSERT INTO categories (name) VALUES (?)",
-            (category["name"],),
+            """INSERT INTO companies (name, description, location, website, siren)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                company["name"],
+                company.get("description"),
+                company.get("location"),
+                company.get("website"),
+                company.get("siren"),
+            ),
         )
-        category_ids[category["name"]] = cur.lastrowid
+        # lastrowid : l'id que la base vient d'attribuer à cette entreprise
+        company_ids[company["name"]] = cur.lastrowid
 
-# --------------------------------------------------
-# 3. Recruteurs : insérer dans people et garder email -> id
-#    (pas de password_hash, role vaut 'user' par défaut)
-# --------------------------------------------------
-contact_ids = {}
+    # --------------------------------------------------
+    # 2. Catégories : chercher d'abord (name est UNIQUE), insérer si absente
+    # --------------------------------------------------
+    category_ids = {}
 
-for contact in data["contacts"]:
-    email = contact["email"].strip().lower()  # même normalisation que l'inscription
+    for category in data["categories"]:
+        row = conn.execute(
+            "SELECT id FROM categories WHERE name = ?",
+            (category["name"],),
+        ).fetchone()
 
-    cur = conn.execute(
-        """INSERT INTO people (first_name, last_name, email, phone)
-           VALUES (?, ?, ?, ?)""",
-        (
-            contact["first_name"],
-            contact["last_name"],
-            email,
-            contact.get("phone"),
-        ),
-    )
-    contact_ids[email] = cur.lastrowid
+        if row is not None:
+            # déjà dans seed.sql (Développement, Design, Data) : on reprend son id
+            category_ids[category["name"]] = row["id"]
+        else:
+            cur = conn.execute(
+                "INSERT INTO categories (name) VALUES (?)",
+                (category["name"],),
+            )
+            category_ids[category["name"]] = cur.lastrowid
 
-# --------------------------------------------------
-# 4. Annonces : retrouver les 3 id à partir des noms et de l'email
-#    (ni status ni created_at : la base met 'open' et la date du moment)
-# --------------------------------------------------
-for ad in data["ads"]:
-    company_id = company_ids[ad["company"]]
-    category_id = category_ids[ad["category"]]
-    contact_id = contact_ids[ad["contact_email"].strip().lower()]
+    # --------------------------------------------------
+    # 3. Recruteurs : insérer dans people et garder email -> id
+    #    (pas de password_hash, role vaut 'user' par défaut)
+    # --------------------------------------------------
+    contact_ids = {}
 
-    # salary : converti en entier (la colonne est un INTEGER)
-    salary = ad.get("salary")
-    if salary is not None:
-        salary = int(salary)
+    for contact in data["contacts"]:
+        email = contact["email"].strip().lower()  # même normalisation que l'inscription
 
-    conn.execute(
-        """INSERT INTO ads (title, short_description, description, salary,
-                            location, working_time, contract_type,
-                            company_id, category_id, contact_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            ad["title"],
-            ad["short_description"],
-            ad.get("description"),
-            salary,
-            ad.get("location"),
-            ad.get("working_time"),
-            ad.get("contract_type"),
-            company_id,
-            category_id,
-            contact_id,
-        ),
-    )
+        cur = conn.execute(
+            """INSERT INTO people (first_name, last_name, email, phone)
+               VALUES (?, ?, ?, ?)""",
+            (
+                contact["first_name"],
+                contact["last_name"],
+                email,
+                contact.get("phone"),
+            ),
+        )
+        contact_ids[email] = cur.lastrowid
+
+    # --------------------------------------------------
+    # 4. Annonces : retrouver les 3 id à partir des noms et de l'email
+    #    (ni status ni created_at : la base met 'open' et la date du moment)
+    # --------------------------------------------------
+    for ad in data["ads"]:
+        company_id = company_ids[ad["company"]]
+        category_id = category_ids[ad["category"]]
+        contact_id = contact_ids[ad["contact_email"].strip().lower()]
+
+        # salary : converti en entier (la colonne est un INTEGER)
+        salary = ad.get("salary")
+        if salary is not None:
+            salary = int(salary)
+
+        conn.execute(
+            """INSERT INTO ads (title, short_description, description, salary,
+                                location, working_time, contract_type,
+                                company_id, category_id, contact_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ad["title"],
+                ad["short_description"],
+                ad.get("description"),
+                salary,
+                ad.get("location"),
+                ad.get("working_time"),
+                ad.get("contract_type"),
+                company_id,
+                category_id,
+                contact_id,
+            ),
+        )
+
+except sqlite3.Error as error:
+    # erreur de la base (ex. SIREN déjà pris) : on annule tout, rien n'est enregistré
+    conn.rollback()
+    conn.close()
+    sys.exit(f"Remplissage annulé, base inchangée : {error}")
 
 # --------------------------------------------------
 # 5. Un seul commit : tout est enregistré, ou rien si le script s'arrête avant
