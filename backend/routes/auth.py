@@ -8,7 +8,7 @@ from auth_utils import (
     login_required,
     validate_text_field,
 )
-
+from login_limit import seconds_blocked, record_failure, reset
 from db import get_db
 
 
@@ -80,6 +80,14 @@ def login():
     email = data["email"].strip().lower()
     password = data["password"]
 
+    blocked_seconds = seconds_blocked(email)
+
+    if blocked_seconds > 0:
+        response = jsonify({"error": "Too many attempts"})
+        response.status_code = 429
+        response.headers["Retry-After"] = str(blocked_seconds)
+        return response
+
     conn = get_db()
 
     row = conn.execute(
@@ -96,9 +104,11 @@ def login():
         or not row["password_hash"]
         or not check_password_hash(row["password_hash"], password)
     ):
+        record_failure(email)
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
 
+    reset(email)
     session.clear()
     session["user_id"] = row["id"]
 
