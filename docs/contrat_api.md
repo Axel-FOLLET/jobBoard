@@ -740,7 +740,7 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST /api/auth/register` | 201 : le compte créé                               | 400 champ invalide ou mot de passe de moins de 8 caractères ; 409 email déjà utilisé |
+| `POST /api/auth/register` | 201 : compte créé ; 202 : vérification de l’email en attente | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
 | `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials`                                       |
 
 ## Corps des requêtes
@@ -813,10 +813,27 @@ Aucune réponse ne contient le mot de passe ni son empreinte (`password_hash`).
 | 400  | `Invalid field: <nom du champ>`          | champ absent, vide, non textuel, trop long, ou email sans `@` |
 | 400  | `JSON object expected`                   | corps de requête qui n'est pas un objet JSON                 |
 | 400  | `Password must be at least 8 characters` | mot de passe trop court                                      |
-| 409  | `Email already used`                     | email déjà enregistré                                        |
+| 409  | `Email already used`                     | email déjà associé à un compte actif                                        |
 | 401  | `Invalid credentials`                    | email inconnu, mot de passe faux ou compte sans mot de passe |
 
 ---
+## Inscription d'un candidat déjà enregistré sans compte
+
+Lorsqu'un email existe déjà dans `people` et que son `password_hash` est vide, le système doit distinguer ce candidat d'un utilisateur possédant déjà un compte.
+
+1. **Création en attente :** le système initialise une procédure d'inscription et envoie un lien de vérification à l'adresse email concernée. Le compte reste en attente tant que l'adresse n'est pas vérifiée.
+2. **Avant vérification :** l'utilisateur peut consulter l'état de sa procédure, mais ne peut pas accéder aux candidatures déjà rattachées à cette personne.
+3. **Après vérification :** le système confirme que l'utilisateur contrôle l'adresse email, lui permet de définir ou de finaliser son mot de passe et rattache le compte à la ligne `people` existante. Les candidatures déjà enregistrées restent associées à cette personne et deviennent accessibles après authentification.
+4. **Si l'utilisateur quitte la page :** la vérification reste obligatoire. La procédure peut être reprise ultérieurement avec le lien reçu par email ou une nouvelle demande de vérification.
+5. **Sécurité :** connaître une adresse email ou rester sur la page d'inscription ne suffit jamais à prendre le contrôle d'un compte ni à accéder aux candidatures d'une autre personne.
+
+### Codes de réponse
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 202 | `Verification required` | Demande de vérification prise en compte |
+| 409 | `Email already used` | L'adresse correspond déjà à un compte actif |
+| 401 | `Login required` | Accès aux candidatures sans session valide |
 
 # Authentification et autorisations
 
