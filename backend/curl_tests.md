@@ -1756,3 +1756,517 @@ Code obtenu : 401, 403, 201, 400
 {"id":7,"name":"Nouvelle"}
 {"error":"Unknown field: siren"}
 ```
+
+## Test J7
+
+# Test 1 : La colonne existe (attendu: company_id|INTEGER|0|NULL)
+
+```bash
+sqlite3 jobboard.db "SELECT name, type, \"notnull\", quote(dflt_value) FROM pragma_table_info('people') WHERE name = 'company_id';"
+```
+
+Code obtenu : 401, 403, 201, 400
+
+```json
+company_id|INTEGER|0|NULL
+```
+
+# Test 2 : L'admin voit le champ (attendu: 200, "company_id": null)
+
+```bash
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/people/15"
+```
+
+Code obtenu : 200
+
+```json
+{
+  "company_id": null,
+  "email": "bob@example.com",
+  "first_name": "Bob",
+  "id": 15,
+  "last_name": "Test",
+  "phone": null,
+  "role": "user"
+}
+```
+
+# Test 3 : Entreprise inconnue (attendu: 400 Unknown reference, pour les 2)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/people/15" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"company_id":999}'
+curl -i -X POST "http://127.0.0.1:5000/api/admin/people" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"first_name":"Rec","last_name":"Test","email":"rec@example.com","company_id":999}'
+```
+
+Code obtenu : 400 (pour les 2)
+
+```json (pour les 2)
+{
+  "error": "Unknown reference"
+}
+```
+
+# Test 4 : L'admin rattache Bob à une entreprise (attendu: 200, "company_id": 1)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/admin/people/15" -H "Content-Type: application/json" -b cookies_admin.txt -d '{"company_id":1}'
+```
+
+Code obtenu : 200
+
+```json
+{
+  "company_id": 1,
+  "email": "bob@example.com",
+  "first_name": "Bob",
+  "id": 15,
+  "last_name": "Test",
+  "phone": null,
+  "role": "user"
+}
+```
+
+# Test 5 : Bob ne peut pas se l'attribuer lui-même (attendu: 400 Unknown field: company_id)
+
+```bash
+curl -i -X PATCH "http://127.0.0.1:5000/api/auth/me" -H "Content-Type: application/json" -b cookies_bob.txt -d '{"company_id":2}'
+```
+
+Code obtenu : 400
+
+```json
+{
+  "error": "Unknown field: company_id"
+}
+```
+
+# Test 6 : Connexion d'un user qui essait de se faire passer pour un recruteur (attendu: 201, puis NULL en base, la personne s'inscrit mais n'est pas recruteuse, le code recruteur est ignoré)
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Eve","last_name":"Test","email":"eve@example.com","password":"motdepasse8","company_id":1}'
+sqlite3 jobboard.db "SELECT email, quote(company_id) FROM people WHERE email = 'eve@example.com';"
+```
+
+Code obtenu : 201 puis NULL
+
+```json register
+{
+  "email": "eve@example.com",
+  "first_name": "Eve",
+  "id": 16,
+  "last_name": "Test",
+  "phone": null,
+  "role": "user"
+}
+```
+
+```json le code
+eve@example.com|NULL
+```
+
+# Test 6 : GET /api/categories, publique (attendu: 200, 6 catégories par ordre alphabétique)
+
+```bash
+curl -i "http://127.0.0.1:5000/api/categories"
+
+```
+
+Code obtenu : 200
+
+```json
+[
+  {
+    "id": 4,
+    "name": "Cybers\u00e9curit\u00e9"
+  },
+  {
+    "id": 3,
+    "name": "Data"
+  },
+  {
+    "id": 2,
+    "name": "Design"
+  },
+  {
+    "id": 1,
+    "name": "D\u00e9veloppement"
+  },
+  {
+    "id": 5,
+    "name": "Gestion de projet"
+  },
+  {
+    "id": 6,
+    "name": "Support informatique"
+  }
+]
+```
+
+# Test 7 : Les refus (le décorateur recruteur_required)
+
+```bash
+# sans session -> attendu : 401 Login required
+curl -i "http://127.0.0.1:5000/api/recruiter/company"
+curl -i "http://127.0.0.1:5000/api/recruiter/ads"
+
+# utilisateur ordinaire -> attendu : 403 Recruiter only
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/company"
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads"
+
+# admin sans entreprise -> attendu : 403 Recruiter only
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/recruiter/company"
+```
+
+Code obtenu : 401 (pour les 2)
+
+```json sans sessions (pour les 2)
+{
+  "error": "Login required"
+}
+```
+
+Code obtenu : 403 (pour les 2)
+
+```json utilisateur ordinaire (pour les 2)
+{
+  "error": "Recruiter only"
+}
+```
+
+Code obtenu : 403
+
+```json admin sans entreprise
+{
+  "error": "Recruiter only"
+}
+```
+
+# Test 8 : GET /api/recruiter/company (attendu: 200, TechNova pour Rec1, avec son siren)
+
+```bash
+curl -i -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/company"
+
+```
+
+Code obtenu : 200
+
+```json
+{
+  "description": "Studio de d\u00e9veloppement web",
+  "id": 1,
+  "location": "Paris",
+  "name": "TechNova",
+  "siren": "000000991",
+  "website": "https://technova.example.com"
+}
+```
+
+# Test 9 : PATCH /api/recruiter/company
+
+```bash
+# corps vide -> attendu : 400 No fields to update
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/company" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{}'
+
+# siren -> attendu : 400 Unknown field: siren
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/company" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"siren":"111111111"}'
+
+# id -> attendu : 400 Unknown field: id
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/company" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"id":5}'
+
+# name vide -> attendu : 400 Missing field: name
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/company" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"name":"   "}'
+
+# correct -> attendu : 200, name "TechNova SA" (espaces retirés) et location modifiée
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/company" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"name":" TechNova SA ","location":"Paris 9e"}'
+
+# l'autre entreprise n'a pas bougé -> attendu : GreenWorks|Lyon
+sqlite3 jobboard.db "SELECT name, location FROM companies WHERE id = 2;"
+```
+
+Code obtenu corps vide : 400
+
+```json
+{
+  "error": "No fields to update"
+}
+```
+
+Code obtenu siren vide : 400
+
+```json
+{
+  "error": "Unknown field: siren"
+}
+```
+
+Code obtenu id vide : 400
+
+```json
+{
+  "error": "Unknown field: id"
+}
+```
+
+Code obtenu name vide : 400
+
+```json
+{
+  "error": "Missing field: name"
+}
+```
+
+Code obtenu cas correct : 200
+
+```json
+{
+  "description": "Studio de d\u00e9veloppement web",
+  "id": 1,
+  "location": "Paris 9e",
+  "name": "TechNova SA",
+  "siren": "000000991",
+  "website": "https://technova.example.com"
+}
+```
+
+Obtenu l'entreprise n'a pas bougé
+
+```json
+GreenWorks|Lyon
+```
+
+# Test 10 : GET /api/recruiter/ads: chacun ne voit que les siennes
+
+```bash
+#Rec1 (TechNova): les annonces 3 (applications_count: 0, oldest_unanswered_at: null) et 1 (applications_count: 2, oldest_unanswered_at: "2025-01-10 09:00:00").
+curl -i -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads"
+
+#Rec2 (GreenWorks): l'annonce 2, fermée (applications_count: 2, oldest_unanswered_at: null, car ses candidatures sont accepted et rejected, aucune pending).
+curl -i -b cookies_rec2.txt "http://127.0.0.1:5000/api/recruiter/ads"
+
+```
+
+Code obtenu cas correct : 200 pour les 2
+
+```json Rec1
+[
+  {
+    "applications_count": 0,
+    "contract_type": "CDI",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 3,
+    "location": "Londres",
+    "oldest_unanswered_at": null,
+    "short_description": "Blue team",
+    "status": "open",
+    "title": "Cybers\u00e9curit\u00e9"
+  },
+  {
+    "applications_count": 2,
+    "contract_type": "CDI",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 1,
+    "location": "Paris",
+    "oldest_unanswered_at": "2025-01-10 09:00:00",
+    "short_description": "Back-end Flask",
+    "status": "open",
+    "title": "D\u00e9veloppeur Python"
+  }
+]
+```
+
+```json Rec2
+[
+  {
+    "applications_count": 2,
+    "contract_type": "Stage",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 2,
+    "location": "Mulhouse",
+    "oldest_unanswered_at": null,
+    "short_description": "Analyse de donn\u00e9es, SQL",
+    "status": "closed",
+    "title": "Data analyst"
+  }
+]
+```
+
+# Test 11 : POST /api/recruiter/ads (attendu : 400 pour company_id, contact_id, title absent et catégorie inconnue ; 201 pour une annonce correcte, qui porte l'entreprise du recruteur)
+
+```bash
+# company_id envoyé -> attendu : 400 Unknown field: company_id
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"T","short_description":"S","category_id":1,"company_id":2}'
+
+# contact_id envoyé -> attendu : 400 Unknown field: contact_id
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"T","short_description":"S","category_id":1,"contact_id":2}'
+
+# title absent -> attendu : 400 Missing field: title
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"short_description":"S","category_id":1}'
+
+# catégorie inconnue -> attendu : 400 Unknown category_id
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"T","short_description":"S","category_id":999}'
+
+# correct -> attendu : 201, "company": "GreenWorks", "category": "Design", contact_id = id de Rec2
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -b cookies_rec2.txt -d '{"title":"Designer","short_description":"UX","category_id":2,"salary":40000,"contract_type":"CDI"}'
+
+# vérification en base : entreprise 2, contact = Rec2, statut open
+sqlite3 jobboard.db "SELECT company_id, contact_id, status FROM ads ORDER BY id DESC LIMIT 1;"
+sqlite3 jobboard.db "SELECT id FROM people WHERE email = 'rec2@example.com';"
+
+# l'annonce apparaît dans la liste de Rec2, pas dans celle de Rec1
+curl -s -b cookies_rec2.txt "http://127.0.0.1:5000/api/recruiter/ads"
+curl -s -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads"
+```
+
+Code obtenu company_id envoyé : 400
+
+```json
+{
+  "error": "Unknown field: company_id"
+}
+```
+
+Code obtenu contact_id envoyé : 400
+
+```json
+{
+  "error": "Unknown field: contact_id"
+}
+```
+
+Code obtenu title absent : 400
+
+```json
+{
+  "error": "Missing field: title"
+}
+```
+
+Code obtenu catégorie inconnue : 400
+
+```json
+{
+  "error": "Unknown category_id"
+}
+```
+
+Code obtenu cas correct : 201
+
+```json
+{
+  "category": "Design",
+  "company": "GreenWorks",
+  "contact_id": 17,
+  "contract_type": "CDI",
+  "created_at": "2026-10-13 13:52:58",
+  "description": null,
+  "id": 54,
+  "location": null,
+  "salary": 40000,
+  "short_description": "UX",
+  "status": "open",
+  "title": "Designer",
+  "working_time": null
+}
+```
+
+Obtenu en base : l'annonce porte l'entreprise de Rec2 (2), Rec2 comme contact (17) et le statut open
+
+```json
+2|17|open
+17
+```
+
+Code obtenu liste de Rec2 : 200, la nouvelle annonce apparaît en premier
+
+```json Rec2
+[
+  {
+    "applications_count": 0,
+    "contract_type": "CDI",
+    "created_at": "2026-10-13 13:52:58",
+    "id": 54,
+    "location": null,
+    "oldest_unanswered_at": null,
+    "short_description": "UX",
+    "status": "open",
+    "title": "Designer"
+  },
+  {
+    "applications_count": 2,
+    "contract_type": "Stage",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 2,
+    "location": "Mulhouse",
+    "oldest_unanswered_at": null,
+    "short_description": "Analyse de données, SQL",
+    "status": "closed",
+    "title": "Data analyst"
+  }
+]
+```
+
+Code obtenu liste de Rec1 : 200, la nouvelle annonce n'y est pas (identique au test 10)
+
+```json Rec1
+[
+  {
+    "applications_count": 0,
+    "contract_type": "CDI",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 3,
+    "location": "Londres",
+    "oldest_unanswered_at": null,
+    "short_description": "Blue team",
+    "status": "open",
+    "title": "Cybersécurité"
+  },
+  {
+    "applications_count": 2,
+    "contract_type": "CDI",
+    "created_at": "2026-10-13 13:27:46",
+    "id": 1,
+    "location": "Paris",
+    "oldest_unanswered_at": "2025-01-10 09:00:00",
+    "short_description": "Back-end Flask",
+    "status": "open",
+    "title": "Développeur Python"
+  }
+]
+```
+
+# Test 12 : seed_data.py rattache les 10 contacts du fichier à l'entreprise de leurs annonces (attendu : 10, puis chaque contact avec son entreprise)
+
+```bash
+# base neuve et remplissage
+python3 init_db.py
+python3 seed_data.py
+
+# nombre de recruteurs -> attendu : 10
+sqlite3 jobboard.db "SELECT COUNT(*) FROM people WHERE company_id IS NOT NULL;"
+
+# qui est rattaché à quelle entreprise -> attendu : les 10 contacts, chacun avec l'entreprise de ses annonces
+sqlite3 -header -column jobboard.db "SELECT people.email, companies.name AS entreprise FROM people JOIN companies ON companies.id = people.company_id;"
+```
+
+Obtenu nombre de recruteurs : 10
+
+```bash
+10
+```
+
+Obtenu rattachement : chaque contact est rattaché à l'entreprise de ses annonces (Alice, Bruno et Chloé de seed.sql restent sans entreprise)
+
+```bash
+email                          entreprise
+-----------------------------  ----------
+elodie.varenot@example.com     Orvelune
+mathis.clervaux@example.com    Talvoria
+ines.delrival@example.com      Nerquilio
+hugo.montelac@example.com      Velsorine
+anais.brivel@example.com       Praxeline
+leo.savenot@example.com        Dorlavie
+manon.rivorel@example.com      Mirelquaz
+noemie.valcen@example.com      Solvenyre
+jules.dorlier@example.com      Brumelix
+camille.lesterval@example.com  Caldrivane
+```

@@ -136,10 +136,22 @@ try:
     # 4. Annonces : retrouver les 3 id à partir des noms et de l'email
     #    (ni status ni created_at : la base met 'open' et la date du moment)
     # --------------------------------------------------
+    contact_companies = {}  # id du contact -> id de l'entreprise de ses annonces
+
     for ad in data["ads"]:
         company_id = company_ids[ad["company"]]
         category_id = category_ids[ad["category"]]
         contact_id = contact_ids[ad["contact_email"].strip().lower()]
+
+        # un recruteur appartient à une seule entreprise
+        if contact_companies.get(contact_id, company_id) != company_id:
+            conn.rollback()
+            conn.close()
+            sys.exit(
+                f"{ad['contact_email']} publie pour deux entreprises différentes. "
+                "Rien n'a été inséré. À signaler à Axel."
+            )
+        contact_companies[contact_id] = company_id
 
         # salary : converti en entier (la colonne est un INTEGER)
         salary = ad.get("salary")
@@ -163,6 +175,16 @@ try:
                 category_id,
                 contact_id,
             ),
+        )
+
+    # --------------------------------------------------
+    # 4 bis. Recruteurs : rattacher chaque contact à l'entreprise de ses annonces
+    #        (sans mot de passe : ils ne peuvent pas se connecter)
+    # --------------------------------------------------
+    for contact_id, company_id in contact_companies.items():
+        conn.execute(
+            "UPDATE people SET company_id = ? WHERE id = ?",
+            (company_id, contact_id),
         )
 
 except sqlite3.Error as error:
