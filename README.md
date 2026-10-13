@@ -1,4 +1,4 @@
-# Y.I.A Jobs — Job Board
+# PROJECT JOB BOARD - Y.I.A Jobs
 
 > À jour du 13/10/2026, fin du J7.
 
@@ -25,9 +25,9 @@ JobBoard/
 │   │   ├── admin.py             CRUD d'administration des cinq tables
 │   │   ├── auth.py              inscription, connexion, déconnexion, compte
 │   │   ├── recruiter.py         catégories, espace recruteur (son entreprise et ses annonces)
-│   │   └── verification.py      confirmation de l'adresse email
+│   │   └── verification.py      confirmation de l'adresse e-mail
 │   ├── pending_registrations.py inscriptions en attente de confirmation de l'adresse
-│   ├── mailer.py                envoi des emails (SMTP), désactivable
+│   ├── mailer.py                envoi des e-mails (SMTP), désactivable
 │   ├── login_limit.py           limite des essais de connexion (5 échecs en 15 minutes)
 │   ├── create_admin.py          crée le compte administrateur à partir du .env
 │   ├── schema.sql               création des tables
@@ -45,10 +45,11 @@ JobBoard/
 │   └── requirements.txt
 ├── docs/
 │   ├── contrat_api.md           contrat de l'API : routes, champs, codes, messages d'erreur
-│   ├── choix_techniques_front.md            choix techniques du front
-│   ├── choix_techniques_back_donnees.md     choix techniques du back : données et API
-│   ├── choix_techniques_comptes_securite.md choix techniques du back : comptes et sécurité
-│   └── usage_ia.md              usage de l'IA dans le projet
+│   ├── choix_techniques_front.md            choix techniques du front-end
+│   ├── choix_techniques_back_donnees.md     choix techniques du back-end : données et API
+│   ├── choix_techniques_comptes_securite.md choix techniques du back-end : comptes et sécurité
+│   ├── usage_ia.md              usage de l'IA par chaque membre de l'équipe
+│   └── YIA_Jobs_soutenance.pptx support de la soutenance (et sa version PDF)
 └── frontend/                    interface React (Vite)
     ├── index.html
     ├── vite.config.js           proxy des appels /api vers l'API Flask
@@ -57,13 +58,14 @@ JobBoard/
         ├── api.js               point d'accès unique à l'API (cookie, JSON, erreurs)
         ├── AuthProvider.jsx     personne connectée, partagée par toutes les pages
         ├── adminTables.js       description des cinq tables pour l'administration
-        ├── components/          barre de navigation, carte d'annonce, formulaire de candidature, formulaire du compte
-        └── pages/               une page par adresse
+        ├── components/          habillage commun, pied de page, barre de recherche, carte d'annonce, formulaires
+        ├── pages/               une page par adresse
+        └── styles/              feuilles de style, une par usage
 ```
 
 ## Prérequis
 
-- Python 3
+- Python 3 (testé avec 3.13 et 3.14)
 - Node.js (testé avec v24) et npm
 
 ## Installation et lancement
@@ -84,7 +86,7 @@ python create_admin.py          # crée l'administrateur décrit dans .env
 python app.py                   # API sur http://localhost:5000
 ```
 
-Sous Windows avec PowerShell, l’activation du venv se fait avec `.\venv\Scripts\Activate.ps1`.
+Sous Windows avec PowerShell, le venv s’active avec `.\venv\Scripts\Activate.ps1`.
 
 ### Front-end
 
@@ -94,11 +96,12 @@ cd frontend
 npm install
 npm run dev                     # interface sur http://localhost:5173
 ```
-Le serveur de développement de Vite transmet à Flask tous les appels dont l’adresse commence par `/api` (proxy configuré dans
-`vite.config.js`) : le navigateur ne parle qu'à une seule origine, ce qui évite les erreurs CORS.
+
+Vite transmet à Flask tous les appels dont l’adresse commence par `/api` (proxy de `vite.config.js`) : le navigateur ne parle qu'à une seule origine, ce qui évite les erreurs CORS.
 
 ## Configuration
-Le back-end utilise `jobboard.db`, dans son dossier de lancement, et le port 5000. Le proxy Vite cible `http://localhost:5000`.
+
+Le back-end utilise `jobboard.db`, dans son dossier de lancement, et le port 5000, que cible le proxy Vite.
 
 La configuration est lue dans `backend/.env`, jamais dans le code. Ce fichier n'est pas suivi par Git : `.env.example` en donne le modèle.
 
@@ -107,11 +110,11 @@ La configuration est lue dans `backend/.env`, jamais dans le code. Ce fichier n'
 | `SECRET_KEY` | signe le cookie de session ; l'API refuse de démarrer sans elle |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | compte administrateur créé par `create_admin.py` |
 | `COOKIE_SECURE` | `1` pour n'envoyer le cookie qu'en HTTPS (facultatif) |
-| `APP_BASE_URL` | adresse du site, utilisée dans le lien de confirmation envoyé par email |
-| `MAIL_ENABLED` | `1` pour envoyer les emails ; `0` ou absent : rien n'est envoyé, le message s'affiche dans le terminal de l'API |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | serveur d'envoi des emails |
+| `APP_BASE_URL` | adresse du site, utilisée dans le lien de confirmation envoyé par e-mail |
+| `MAIL_ENABLED` | `1` pour envoyer les e-mails ; `0` ou absent : rien n'est envoyé, le message s'affiche dans le terminal de l'API |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | serveur d'envoi des e-mails |
 
-Le cookie de session est `HttpOnly` et `SameSite=Lax`, et sa signature expire au bout d'un jour. Les mots de passe sont enregistrés hachés (`scrypt`).
+Le cookie de session est `HttpOnly` et `SameSite=Lax` ; sa signature expire au bout d'un jour. Les mots de passe sont enregistrés hachés (`scrypt`).
 
 ## Base de données
 
@@ -119,7 +122,7 @@ Le cookie de session est `HttpOnly` et `SameSite=Lax`, et sa signature expire au
 | --- | --- | --- |
 | `companies` | entreprises | id, name, description, location, website, siren (9 chiffres, unique) |
 | `categories` | catégories d'annonces | id, name (unique) |
-| `people` | candidats, comptes et responsables d'annonces | id, first_name, last_name, email (unique), phone, password_hash, role (`user` / `admin`), company_id (entreprise d'un recruteur) |
+| `people` | candidats, comptes et responsables d'annonces | id, first_name, last_name, email (unique), phone, password_hash, role (`user` / `admin`), company_id |
 | `ads` | annonces | id, title, short_description, description, salary, location, working_time, contract_type, status (`open` / `closed`), created_at, company_id, category_id, contact_id |
 | `applications` | candidatures | id, ad_id, person_id, message, status (`pending` / `accepted` / `rejected`), created_at |
 | `pending_registrations` | inscriptions en attente de confirmation de l'adresse | id, person_id (unique), token_hash (unique), first_name, last_name, phone, password_hash, created_at, expires_at |
@@ -133,9 +136,10 @@ Relations :
 
 Les clés étrangères des cinq tables principales sont en `ON DELETE RESTRICT` : la base refuse de supprimer une entreprise, une catégorie ou une personne encore référencée, ni une annonce qui a des candidatures. Les statuts et le rôle sont limités à leurs valeurs par des contraintes `CHECK`.
 
-Une personne qui a candidaté sans compte est enregistrée dans `people` sans mot de passe. Si elle crée ensuite son compte avec le même email, l'inscription attend dans `pending_registrations` qu'elle ouvre le lien envoyé à cette adresse : connaître un email ne donne jamais accès au compte ni aux candidatures de quelqu'un d'autre. Le jeton du lien n'est enregistré que haché ; il est valable 24 heures et ne sert qu'une fois. Cette table est créée automatiquement au premier usage si la base existe déjà.
+Une personne qui a candidaté sans compte est enregistrée dans `people` sans mot de passe. Si elle crée ensuite son compte avec la même adresse, l'inscription attend dans `pending_registrations` qu'elle ouvre le lien envoyé à cette adresse : connaître un e-mail ne donne jamais accès au compte ni aux candidatures de quelqu'un d'autre. Le jeton du lien n'est enregistré que haché ; il est valable 24 heures et ne sert qu'une fois. Cette table est créée automatiquement au premier usage si la base existe déjà.
 
 ## Routes de l'API
+
 Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs, des codes et des messages est dans [`docs/contrat_api.md`](docs/contrat_api.md).
 
 | Méthode | Route | Accès | Fonction |
@@ -143,16 +147,16 @@ Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs,
 | GET | `/api/ads` | public | Lister les annonces ouvertes, avec filtres et pagination facultatifs |
 | GET | `/api/ads/<id>` | public | Obtenir le détail d’une annonce (même fermée) |
 | GET | `/api/companies/<id>/ads` | public | Lister les annonces ouvertes d’une entreprise |
+| GET | `/api/categories` | public | Lister les catégories |
 | POST | `/api/ads/<id>/applications` | public | Enregistrer une candidature, avec ou sans compte |
 | POST | `/api/auth/register` | public | Créer un compte (ouvre la session) |
 | POST | `/api/auth/verify` | public | Confirmer l'adresse d'une inscription en attente |
 | POST | `/api/auth/login` | public | Se connecter (ouvre la session) |
 | POST | `/api/auth/logout` | public | Se déconnecter |
-| GET, PATCH | `/api/auth/me` | connecté | Lire ou modifier son compte |
+| GET, PATCH | `/api/auth/me` | connecté | Lire ou modifier son compte (sauf l'adresse e-mail) |
 | GET | `/api/me/applications` | connecté | Lister ses candidatures |
-| GET | `/api/categories` | public | Lister les catégories |
-| GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (SIREN non modifiable) |
-| GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise, ou en publier une |
+| GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (sauf le SIREN) |
+| GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise ou en publier une |
 | POST | `/api/ads` | admin | Créer une annonce |
 | POST | `/api/ads/<id>/closure` | admin | Clôturer une annonce et désigner la candidature retenue |
 | GET | `/api/admin/<table>` | admin | Lister les lignes d'une table, avec pagination |
@@ -161,47 +165,64 @@ Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs,
 | PATCH | `/api/admin/<table>/<id>` | admin | Modifier une ligne |
 | DELETE | `/api/admin/<table>/<id>` | admin | Supprimer une ligne |
 
-Un recruteur est une personne connectée dont la fiche est rattachée à une entreprise : le serveur lit cette entreprise dans la base, jamais dans la requête. L'adresse e-mail d'un compte n'est pas modifiable par `PATCH /api/auth/me`.
+Un recruteur est une personne connectée dont la fiche est rattachée à une entreprise : le serveur lit cette entreprise dans la base, jamais dans la requête.
 
-Les tables de l'administration sont `companies`, `categories`, `people`, `ads` et `applications`. Filtres de `GET /api/ads`, tous facultatifs et combinables : `q` (texte dans le titre ou la description courte), `category`, `contract_type` et `location` (valeurs exactes). Les annonces fermées n’apparaissent jamais dans les listes. Pagination : `page` et `per_page` (1 à 50) ; le nombre total de lignes est renvoyé dans l'en-tête `X-Total-Count`.
+Filtres de `GET /api/ads`, tous facultatifs et combinables : `q` (texte dans le titre ou la description courte), `category`, `contract_type` et `location` (valeurs exactes). Les annonces fermées n’apparaissent jamais dans les listes. Pagination : `page` et `per_page` (1 à 50) ; le nombre total de lignes est renvoyé dans l'en-tête `X-Total-Count`.
 
-Les routes renvoient 200 en lecture, 201 à la création, 202 pour une inscription en attente de confirmation, 204 après une suppression, 400 pour une requête invalide, 401 sans connexion ou pour un identifiant incorrect, 403 sans le rôle administrateur ou, pour l'espace recruteur, sans entreprise rattachée, 404 pour une ressource inexistante, 409 pour un doublon ou une ligne encore référencée, et 429 après 5 échecs de connexion en 15 minutes pour le même email (l'en-tête `Retry-After` donne l'attente en secondes). Les erreurs ont toujours la forme `{"error": "..."}`. Aucune réponse ne contient de mot de passe ni d'empreinte. Les commandes et résultats des vérifications sont dans `backend/curl_tests.md` et `backend/tests/curl_auth.md` ; les tests automatiques de la limite de connexion se lancent depuis `backend/` avec `python -m unittest tests.test_login_limit -v`.
+Les routes renvoient 200 en lecture, 201 à la création, 202 pour une inscription en attente de confirmation, 204 après une suppression, 400 pour une requête invalide, 401 sans connexion ou pour un identifiant incorrect, 403 sans le rôle administrateur ou, pour l'espace recruteur, sans entreprise rattachée, 404 pour une ressource inexistante, 409 pour un doublon ou une ligne encore référencée, et 429 après 5 échecs de connexion en 15 minutes pour le même e-mail (l'en-tête `Retry-After` donne l'attente en secondes). Les erreurs ont toujours la forme `{"error": "..."}`. Aucune réponse ne contient de mot de passe ni d'empreinte.
+
+Les commandes et résultats des vérifications sont dans `backend/curl_tests.md` et `backend/tests/curl_auth.md`. Les tests automatiques de la limite de connexion se lancent depuis `backend/` avec `python -m unittest tests.test_login_limit -v`.
 
 ## Pages
-Navigation sans rechargement de la page (React Router), avec une barre commune : la page active est marquée et le logo ramène à l'accueil. Le menu dépend de la personne : « Offres d'emploi » pour tous, « Connexion » pour un visiteur, « Espace recruteur », « Espace candidat » et « Se déconnecter » une fois connecté, « Administration » pour un administrateur. Sur mobile, il se replie derrière un bouton « Menu ».
+
+Navigation sans rechargement de la page (React Router), avec une barre commune : la page active est marquée et le logo ramène à l'accueil. Le menu dépend de la personne : « Offres d'emploi » pour tous, « Connexion » pour un visiteur, « Espace recruteur », « Espace candidat » et « Se déconnecter » une fois connecté, « Administration » pour un administrateur. Sur mobile, il se replie derrière un bouton « Menu ». Le pied de page reprend la navigation et les mentions légales.
 
 | Adresse | Page |
 | --- | --- |
 | `/` | Accueil : barre de recherche et les deux offres les plus récentes |
 | `/offres` | Offres d'emploi : liste des annonces ouvertes, filtrée par la recherche de l'accueil |
 | `/login` | Connexion |
-| `/account` | Création de compte : la personne est connectée dès la création, puis renvoyée à l'accueil |
-| `/verification` | Confirmation de l'adresse, ouverte depuis le lien reçu par email |
+| `/account` | Création de compte : la session s'ouvre dès la création, puis l'accueil s'affiche |
+| `/verification` | Confirmation de l'adresse, ouverte depuis le lien reçu par e-mail |
 | `/espace-candidat` | Espace candidat, onglet « Mes candidatures » |
-| `/espace-candidat/informations` | Espace candidat, onglet « Mes informations » : modification du compte |
+| `/espace-candidat/informations` | Espace candidat, onglet « Mes informations » : modification du compte, adresse e-mail en lecture seule |
 | `/recruteur` | Espace recruteur, onglet « Vue d'ensemble » |
-| `/recruteur/entreprise` | Espace recruteur, onglet « Mon entreprise » |
-| `/recruteur/postes` | Espace recruteur, onglet « Mes postes » |
+| `/recruteur/entreprise` | Espace recruteur, onglet « Mon entreprise » : fiche de l'entreprise, SIREN en lecture seule |
+| `/recruteur/postes` | Espace recruteur, onglet « Mes postes » : annonces de l'entreprise |
 | `/recruteur/nouvelle-offre` | Espace recruteur, onglet « Publier une offre » |
 | `/admin` | Administration : les cinq tables, avec création, modification, suppression et pagination |
 | autre adresse | Page introuvable |
 
-Les onglets des espaces candidat et recruteur sont des boutons, comme le choix des tables en administration. L'espace candidat demande d'être connecté : un visiteur y trouve un lien vers la connexion. « Mes candidatures » affiche les candidatures de la personne connectée, lues dans l'API. L'administration est réservée aux administrateurs : sinon, la page affiche un message sans rien demander à l'API. L'espace recruteur lit et écrit dans l'API : vue d'ensemble et liste des annonces de l'entreprise, fiche de l'entreprise (SIREN en lecture seule) et publication d'une annonce avec sa catégorie. Sans connexion, la page propose de se connecter ; sans entreprise rattachée, elle explique que l'administration doit rattacher le compte. Dans « Mes informations », l'adresse e-mail est affichée sans être modifiable.
+Toutes ces pages lisent et écrivent dans l'API. Les espaces candidat et recruteur demandent d'être connecté : un visiteur y trouve un lien vers la connexion. Sans entreprise rattachée, l'espace recruteur indique que l'administration doit rattacher le compte. L'administration est réservée aux administrateurs : sinon, la page affiche un message sans rien demander à l'API.
 
 Sur chaque annonce, le bouton « En savoir plus » affiche dans la carte toutes les informations de l’annonce, sans fenêtre modale ; un message signale le chargement ou l’échec d’une requête. Le bouton « Postuler » ouvre sous l’annonce le formulaire de candidature, avec ou sans compte. Les textes de l’interface sont en français.
 
 ## Évolutions prévues
 
-Le planning sera revu après la soutenance de mi-parcours du 14/10. Ces fonctionnalités ne sont pas encore réalisées :
+Le planning sera revu après la soutenance de mi-parcours du 14/10. Ces fonctionnalités ne sont pas encore réalisées ; elles sont classées par ordre de priorité :
 
-- Clôture d’une annonce depuis l’interface, emails de réception, d’acceptation et de refus, suite du design.
-- Modification de l'adresse e-mail d'un compte, confirmée par un lien envoyé à la nouvelle adresse.
-- J8 : vérification des parcours et de l’installation sur une machine neuve.
 
-Le lancement du projet final à partir du build React sera documenté lorsqu’il sera en place.
+**Prioritaire** :
 
-## Auteurs
 
-- Axel FOLLET
-- Yohan AVRONSART
-- Ismail BASSIT
+1. E-mails de réception, d’acceptation et de refus d’une candidature, avec leur suivi dans la table des
+   candidatures ;
+2. Consultation des candidatures reçues par le recruteur, avec acceptation ou refus ;
+
+**À faire** : 
+
+
+3. Modification, clôture et suppression d’une annonce depuis l’espace recruteur (la clôture existe déjà dans
+   l’API) ;
+4. Suite du design ;
+5. Vérification des parcours et de l’installation sur une machine neuve ;
+
+**Bonus** : 
+
+
+6. Badge « Nouveau » sur les annonces récentes ;
+7. Modification de l’adresse e-mail d’un compte, confirmée par un lien envoyé à la nouvelle adresse ;
+8. Dépôt d’un CV avec la candidature et téléchargement par le recruteur ;
+9. Protection CSRF des formulaires.
+
+*Le lancement du projet final à partir du build React sera documenté lorsqu’il sera en place.*
