@@ -1,9 +1,26 @@
 from functools import wraps
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from auth_utils import current_user
 from db import get_db
+from routes.ads import fetch_ad
 
 recruiter = Blueprint("recruiter", __name__)
+
+# Champs que le recruteur peut modifier sur son entreprise (pas le siren)
+COMPANY_FIELDS = ["name", "description", "location", "website"]
+
+# Champs acceptés pour une nouvelle annonce (company_id et contact_id : remplis par le serveur)
+AD_FIELDS = [
+    "title",
+    "short_description",
+    "category_id",
+    "description",
+    "salary",
+    "location",
+    "working_time",
+    "contract_type",
+]
+AD_REQUIRED = ["title", "short_description", "category_id"]
 
 
 # Vérifier que la personne connectée est recruteur.
@@ -34,3 +51,159 @@ def recruiter_required(view):
         return view(*args, company_id=row["company_id"], **kwargs)
 
     return wrapped_view
+
+
+# Lire l'entreprise dans le format du contrat
+def fetch_company(conn, company_id):
+    return conn.execute(
+        """SELECT id, name, description, location, website, siren
+           FROM companies
+           WHERE id = ?""",
+        (company_id,),
+    ).fetchone()
+
+
+#------------------- GET /api/categories (publique) -------------------
+
+@recruiter.route("/categories", methods=["GET"])
+def list_categories():
+    conn = get_db()
+    rows = conn.execute("SELECT id, name FROM categories ORDER BY name").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+#------------------- GET /api/recruiter/company -------------------
+
+@recruiter.route("/recruiter/company", methods=["GET"])
+@recruiter_required
+def get_company(company_id):
+    conn = get_db()
+    row = fetch_company(conn, company_id)
+    conn.close()
+    return jsonify(dict(row))
+
+
+#------------------- PATCH /api/recruiter/company -------------------
+
+@recruiter.route("/recruiter/company", methods=["PATCH"])
+@recruiter_required
+def update_company(company_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+
+    if not data:
+        return jsonify({"error": "No fields to update"}), 400
+
+    # siren, id ou tout autre champ : refusé
+    for field in data:
+        if field not in COMPANY_FIELDS:
+            return jsonify({"error": f"Unknown field: {field}"}), 400
+
+    # name ne peut pas être vidé
+    if "name" in data:
+        name = data["name"]
+        if not isinstance(name, str) or not name.strip():
+            return jsonify({"error": "Missing field: name"}), 400
+        data["name"] = name.strip()
+
+    fields = list(data.keys())
+    assignments = ", ".join(f"{field} = ?" for field in fields)  # noms tirés de COMPANY_FIELDS
+    values = [data[field] for field in fields]
+
+    conn = get_db()
+    # WHERE id = l'entreprise du recruteur : il ne peut modifier que la sienne
+    conn.execute(
+        f"UPDATE companies SET {assignments} WHERE id = ?",
+        values + [company_id],
+    )
+    conn.commit()
+    row = fetch_company(conn, company_id)
+    conn.close()
+    return jsonify(dict(row)), 200
+
+
+#------------------- GET /api/recruiter/ads -------------------
+
+@recruiter.route("/recruiter/ads", methods=["GET"])
+@recruiter_required
+def list_company_ads(company_id):
+    conn = get_db()
+    # LEFT JOIN : garde les annonces sans candidature (applications_count = 0)
+    rows = conn.execute(
+        """SELECT ads.id, ads.title, ads.short_description, ads.location,
+                  ads.contract_type, ads.status, ads.created_at,
+                  COUNT(applications.id) AS applications_count,
+                  MIN(CASE WHEN applications.status = 'pending'
+                           THEN applications.created_at END) AS oldest_unanswered_at
+           FROM ads
+           LEFT JOIN applications ON applications.ad_id = ads.id
+           WHERE ads.company_id = ?
+           GROUP BY ads.id
+           ORDER BY ads.created_at DESC, ads.id DESC""",
+        (company_id,),
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+#------------------- POST /api/recruiter/ads -------------------
+
+@recruiter.route("/recruiter/ads", methods=["POST"])
+@recruiter_required
+def create_company_ad(company_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+
+    # company_id, contact_id ou tout autre champ : refusé
+    for field in data:
+        if field not in AD_FIELDS:
+            return jsonify({"error": f"Unknown field: {field}"}), 400
+
+    for field in AD_REQUIRED:
+        if data.get(field) in (None, ""):
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    # category_id doit être un identifiant (pas une liste, pas true/false)
+    category_id = data["category_id"]
+    if isinstance(category_id, bool) or not isinstance(category_id, (int, str)):
+        return jsonify({"error": "Unknown category_id"}), 400
+
+    conn = get_db()
+
+    category = conn.execute(
+        "SELECT id FROM categories WHERE id = ?",
+        (category_id,),
+    ).fetchone()
+    if category is None:
+        conn.close()
+        return jsonify({"error": "Unknown category_id"}), 400
+
+    # le serveur remplit l'entreprise (celle du recruteur) et le contact (le recruteur)
+    contact_id = current_user()["id"]
+
+    cur = conn.execute(
+        """INSERT INTO ads (title, short_description, description, salary,
+                            location, working_time, contract_type,
+                            company_id, category_id, contact_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            data["title"],
+            data["short_description"],
+            data.get("description"),
+            data.get("salary"),
+            data.get("location"),
+            data.get("working_time"),
+            data.get("contract_type"),
+            company_id,
+            data["category_id"],
+            contact_id,
+        ),
+    )
+    conn.commit()
+
+    row = fetch_ad(conn, cur.lastrowid)
+    conn.close()
+    return jsonify(dict(row)), 201
