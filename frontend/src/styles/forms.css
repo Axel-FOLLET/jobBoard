@@ -50,6 +50,12 @@ input:disabled, textarea:disabled, select:disabled {
   color: var(--color-text-secondary);
 }
 
+/* Champ affiché sans être modifiable (adresse e-mail, SIREN). */
+input[readonly] {
+  background: var(--color-neutral);
+  color: var(--color-text-secondary);
+}
+
 /* Messages de validation dans les formulaires. */
 form label + p, form div > input + p, form [role="alert"] {
   color: var(--color-danger);

@@ -99,10 +99,10 @@ def notify_closure(conn, ad_id):
 def send_verification_link(to, first_name, token):
     """Lien de vérification d'une inscription mise en attente.
 
-    Le lien est toujours écrit dans le journal du serveur : sans SMTP réglé
-    (MAIL_ENABLED absent de .env), la procédure reste testable en développement.
-    Il ne sort jamais dans la réponse HTTP : seule la personne qui lit l'adresse
-    email, ou qui tient le terminal du serveur, peut l'utiliser.
+    Le lien n'est écrit dans le journal du serveur que si l'envoi est désactivé
+    (MAIL_ENABLED différent de "1", en développement) : la procédure reste testable
+    sans SMTP. Si l'envoi est activé mais échoue, le lien n'est écrit nulle part.
+    Il ne sort jamais dans la réponse HTTP.
     """
     base_url = os.environ.get("APP_BASE_URL", "http://localhost:5173")
     link = f"{base_url}/verification?token={token}"
@@ -121,7 +121,7 @@ def send_verification_link(to, first_name, token):
 
     sent = send_email(to, "Confirmez votre adresse — Y.I.A Jobs", body)
 
-    if not sent:
+    if not sent and os.environ.get("MAIL_ENABLED") != "1":
         print(f"[vérification] lien pour {to} : {link}")
 
     return sent

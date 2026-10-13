@@ -1058,6 +1058,8 @@ Mêmes champs que [`POST /api/ads`](#post-apiads), **sans** `company_id` ni `con
 # Changements J7
 
 - Espace recruteur : colonne `people.company_id`, routes `GET /api/categories`, `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, erreur 403 `Recruiter only`.
+- `PATCH /api/auth/me` : `email` n'est plus modifiable (400 `Unknown field: email`) ; un `phone` vide est enregistré `null`.
+- Inscription en attente : le lien de vérification n'est écrit dans le journal du serveur que si l'envoi d'e-mails est désactivé.
 
 ---
 

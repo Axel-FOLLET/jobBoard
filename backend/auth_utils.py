@@ -1,6 +1,7 @@
 import os
 import sqlite3
 
+from datetime import timedelta
 from functools import wraps
 
 from dotenv import load_dotenv
@@ -8,6 +9,20 @@ from flask import jsonify, request, session
 from werkzeug.security import generate_password_hash
 
 from db import get_db
+
+# scrypt N=2^15, r=8, p=3 : l'un des réglages minimaux de l'OWASP. Le réglage par
+# défaut de Werkzeug (p=1) reste en dessous.
+PASSWORD_METHOD = "scrypt:32768:8:3"
+
+
+def hash_password(password):
+    return generate_password_hash(password, method=PASSWORD_METHOD)
+
+
+def needs_rehash(password_hash):
+    """Vrai pour une empreinte calculée avec un ancien réglage : à recalculer."""
+    return not password_hash.startswith(PASSWORD_METHOD + "$")
+
 
 
 def init_security(app):
@@ -26,6 +41,9 @@ def init_security(app):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE") == "1",
+        # Un cookie signé depuis plus d'un jour est refusé (31 jours par défaut) :
+        # une copie dérobée ne sert pas longtemps, même après la déconnexion.
+        PERMANENT_SESSION_LIFETIME=timedelta(days=1),
     )
 
 def current_user():
@@ -111,7 +129,7 @@ def create_person(
     phone=None,
 ):
     email = email.strip().lower()
-    password_hash = generate_password_hash(password)
+    password_hash = hash_password(password)
 
     cursor = conn.execute(
         """

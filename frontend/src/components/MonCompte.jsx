@@ -9,7 +9,6 @@ export default function MonCompte({ user }) {
     // Champs préremplis avec les informations actuelles de la personne.
     const [firstName, setFirstName] = useState(user.first_name)
     const [surname, setSurname] = useState(user.last_name)
-    const [email, setEmail] = useState(user.email)
     const [telephone, setTelephone] = useState(user.phone ?? '')
     // status pilote le bouton et les messages : idle, sending, sent, nochange, error.
     const [status, setStatus] = useState('idle')
@@ -30,9 +29,6 @@ export default function MonCompte({ user }) {
         }
         if (surname.trim() !== user.last_name) {
             body.last_name = surname.trim()
-        }
-        if (email.trim() !== user.email) {
-            body.email = email.trim()
         }
         if (telephone.trim() !== (user.phone ?? '')) {
             body.phone = telephone.trim()
@@ -67,9 +63,7 @@ export default function MonCompte({ user }) {
             setStatus('error')
 
             // Un message français par code de l'API ; 401 ajoute un lien de reconnexion.
-            if (httpStatus === 409) {
-                setSendError('Cette adresse e-mail est déjà utilisée par un autre compte.')
-            } else if (httpStatus === 401) {
+            if (httpStatus === 401) {
                 setSendError('Votre session a expiré.')
                 setNeedLogin(true)
             } else if (httpStatus === 400) {
@@ -109,9 +103,10 @@ export default function MonCompte({ user }) {
                 <input type="text" name="telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
             </label>
 
+            {/* Adresse affichée seulement : l'API refuse de la modifier sans vérification. */}
             <label>
                 Adresse e-mail
-                <input type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input type="email" name="email" value={user.email} readOnly />
             </label>
 
             <div className="form-actions">

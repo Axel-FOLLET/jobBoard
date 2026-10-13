@@ -1,6 +1,6 @@
 import sqlite3
 from flask import Blueprint, jsonify, request, session
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 import pending_registrations
 from mailer import send_verification_link
@@ -8,7 +8,9 @@ from auth_utils import (
     create_person,
     current_user,
     get_json_object,
+    hash_password,
     login_required,
+    needs_rehash,
     validate_text_field,
 )
 from login_limit import seconds_blocked, record_failure, reset
@@ -61,7 +63,7 @@ def register():
             first_name,
             data["last_name"].strip(),
             (data.get("phone") or "").strip() or None,
-            generate_password_hash(password),
+            hash_password(password),
         )
 
         conn.close()
@@ -144,6 +146,14 @@ def login():
         conn.close()
         return jsonify({"error": "Invalid credentials"}), 401
 
+    # Empreinte d'un ancien réglage : le mot de passe vient d'être vérifié, on la recalcule.
+    if needs_rehash(row["password_hash"]):
+        conn.execute(
+            "UPDATE people SET password_hash = ? WHERE id = ?",
+            (hash_password(password), row["id"]),
+        )
+        conn.commit()
+
     reset(email)
     session.clear()
     session["user_id"] = row["id"]
@@ -186,7 +196,9 @@ def me():
     if not data:
         return jsonify({"error": "No field to update"}), 400
 
-    allowed_fields = {"first_name", "last_name", "phone", "email"}
+    # L'adresse e-mail n'est pas modifiable ici : sans vérification de la nouvelle
+    # adresse, on pourrait s'approprier celle d'une autre personne.
+    allowed_fields = {"first_name", "last_name", "phone"}
 
     for field in data:
         if field not in allowed_fields:
@@ -196,33 +208,12 @@ def me():
         if field == "phone" and data[field] == "":
             continue
 
-        error = validate_text_field(
-            data,
-            field,
-            email=(field == "email"),
-        )
+        error = validate_text_field(data, field)
 
         if error:
             return error
 
-    if "email" in data:
-        data["email"] = data["email"].strip().lower()
-
     conn = get_db()
-
-    if "email" in data:
-        existing_user = conn.execute(
-            """
-            SELECT id
-            FROM people
-            WHERE email = ? AND id != ?
-            """,
-            (data["email"], user["id"]),
-        ).fetchone()
-
-        if existing_user is not None:
-            conn.close()
-            return jsonify({"error": "Email already used"}), 409
 
     fields = list(data.keys())
     values = []
@@ -232,6 +223,10 @@ def me():
 
         if isinstance(value, str):
             value = value.strip()
+
+        # Téléphone effacé : NULL en base, comme une personne qui n'en a jamais donné.
+        if field == "phone" and value == "":
+            value = None
 
         values.append(value)
 
