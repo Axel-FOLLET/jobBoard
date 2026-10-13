@@ -127,14 +127,29 @@ Le cookie de session est `HttpOnly` et `SameSite=Lax` ; sa signature expire au b
 | `applications` | candidatures | id, ad_id, person_id, message, status (`pending` / `accepted` / `rejected`), created_at |
 | `pending_registrations` | inscriptions en attente de confirmation de l'adresse | id, person_id (unique), token_hash (unique), first_name, last_name, phone, password_hash, created_at, expires_at |
 
+```text
+companies 1 ───< N ads N >─── 1 categories
+    1             N
+    │             │ contact_id (responsable de l'annonce)
+    │             1
+    └─────────< N people          (company_id : recruteurs rattachés)
+
+ads 1 ───< N applications N >─── 1 people   (person_id : candidat)
+
+people 1 ─── 0..1 pending_registrations     (inscription en attente)
+```
+
 Relations :
 - une entreprise publie plusieurs annonces (`ads.company_id`) ;
 - une annonce appartient à une seule catégorie (`ads.category_id`) et a un responsable (`ads.contact_id`) ;
 - un recruteur est rattaché à une entreprise (`people.company_id`), par l'administration uniquement ;
 - une personne peut postuler à plusieurs annonces et une annonce recevoir plusieurs candidatures (table `applications`) ;
-- une personne ne peut pas postuler deux fois à la même annonce (`UNIQUE (ad_id, person_id)`).
+- une personne ne peut pas postuler deux fois à la même annonce (`UNIQUE (ad_id, person_id)`) ;
+- une personne sans `password_hash` (candidat sans compte) existe en base mais ne peut pas se connecter.
 
-Les clés étrangères des cinq tables principales sont en `ON DELETE RESTRICT` : la base refuse de supprimer une entreprise, une catégorie ou une personne encore référencée, ni une annonce qui a des candidatures. Les statuts et le rôle sont limités à leurs valeurs par des contraintes `CHECK`.
+Deux règles surprennent à la lecture :
+- **Aucune suppression en cascade.** Les clés étrangères des cinq tables principales sont en `ON DELETE RESTRICT` : la base refuse de supprimer une entreprise, une catégorie ou une personne encore référencée, et une annonce qui a des candidatures. Il faut d'abord supprimer ou réaffecter ce qui y fait référence (l'API répond alors 409 `Record is still referenced`).
+- **Les valeurs autorisées sont tenues par la base**, avec des contraintes `CHECK` : `ads.status`, `applications.status`, `people.role` et le format de `companies.siren`. Une valeur hors liste est refusée même si elle ne passe pas par l'API.
 
 Une personne qui a candidaté sans compte est enregistrée dans `people` sans mot de passe. Si elle crée ensuite son compte avec la même adresse, l'inscription attend dans `pending_registrations` qu'elle ouvre le lien envoyé à cette adresse : connaître un e-mail ne donne jamais accès au compte ni aux candidatures de quelqu'un d'autre. Le jeton du lien n'est enregistré que haché ; il est valable 24 heures et ne sert qu'une fois. Cette table est créée automatiquement au premier usage si la base existe déjà.
 
@@ -142,28 +157,30 @@ Une personne qui a candidaté sans compte est enregistrée dans `people` sans mo
 
 Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs, des codes et des messages est dans [`docs/contrat_api.md`](docs/contrat_api.md).
 
-| Méthode | Route | Accès | Fonction |
-| --- | --- | --- | --- |
-| GET | `/api/ads` | public | Lister les annonces ouvertes, avec filtres et pagination facultatifs |
-| GET | `/api/ads/<id>` | public | Obtenir le détail d’une annonce (même fermée) |
-| GET | `/api/companies/<id>/ads` | public | Lister les annonces ouvertes d’une entreprise |
-| GET | `/api/categories` | public | Lister les catégories |
-| POST | `/api/ads/<id>/applications` | public | Enregistrer une candidature, avec ou sans compte |
-| POST | `/api/auth/register` | public | Créer un compte (ouvre la session) |
-| POST | `/api/auth/verify` | public | Confirmer l'adresse d'une inscription en attente |
-| POST | `/api/auth/login` | public | Se connecter (ouvre la session) |
-| POST | `/api/auth/logout` | public | Se déconnecter |
-| GET, PATCH | `/api/auth/me` | connecté | Lire ou modifier son compte (sauf l'adresse e-mail) |
-| GET | `/api/me/applications` | connecté | Lister ses candidatures |
-| GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (sauf le SIREN) |
-| GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise ou en publier une |
-| POST | `/api/ads` | admin | Créer une annonce |
-| POST | `/api/ads/<id>/closure` | admin | Clôturer une annonce et désigner la candidature retenue |
-| GET | `/api/admin/<table>` | admin | Lister les lignes d'une table, avec pagination |
-| GET | `/api/admin/<table>/<id>` | admin | Lire une ligne |
-| POST | `/api/admin/<table>` | admin | Créer une ligne |
-| PATCH | `/api/admin/<table>/<id>` | admin | Modifier une ligne |
-| DELETE | `/api/admin/<table>/<id>` | admin | Supprimer une ligne |
+Accès : **public** (sans connexion), **connecté** (session ouverte), **recruteur** (connecté et rattaché à une entreprise), **admin** (compte de rôle `admin`).
+
+| Méthode | Route | Accès | Fonction | Codes |
+| --- | --- | --- | --- | --- |
+| GET | `/api/ads` | public | Lister les annonces ouvertes, avec filtres et pagination facultatifs | 200, 400 |
+| GET | `/api/ads/<id>` | public | Obtenir le détail d’une annonce (même fermée) | 200, 404 |
+| GET | `/api/companies/<id>/ads` | public | Lister les annonces ouvertes d’une entreprise | 200, 404 |
+| GET | `/api/categories` | public | Lister les catégories | 200 |
+| POST | `/api/ads/<id>/applications` | public | Enregistrer une candidature, avec ou sans compte | 201, 400, 401, 404, 409 |
+| POST | `/api/auth/register` | public | Créer un compte (ouvre la session) | 201, 202, 400, 409 |
+| POST | `/api/auth/verify` | public | Confirmer l'adresse d'une inscription en attente | 200, 400, 409 |
+| POST | `/api/auth/login` | public | Se connecter (ouvre la session) | 200, 400, 401, 429 |
+| POST | `/api/auth/logout` | public | Se déconnecter | 204 |
+| GET, PATCH | `/api/auth/me` | connecté | Lire ou modifier son compte (sauf l'adresse e-mail) | 200, 400, 401, 409 |
+| GET | `/api/me/applications` | connecté | Lister ses candidatures | 200, 401 |
+| GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (sauf le SIREN) | 200, 400, 401, 403 |
+| GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise ou en publier une | 200, 201, 400, 401, 403 |
+| POST | `/api/ads` | admin | Créer une annonce | 201, 400, 401, 403 |
+| POST | `/api/ads/<id>/closure` | admin | Clôturer une annonce et désigner la candidature retenue | 200, 400, 401, 403, 404, 409 |
+| GET | `/api/admin/<table>` | admin | Lister les lignes d'une table, avec pagination | 200, 400, 401, 403, 404 |
+| GET | `/api/admin/<table>/<id>` | admin | Lire une ligne | 200, 401, 403, 404 |
+| POST | `/api/admin/<table>` | admin | Créer une ligne | 201, 400, 401, 403, 404, 409 |
+| PATCH | `/api/admin/<table>/<id>` | admin | Modifier une ligne | 200, 400, 401, 403, 404, 409 |
+| DELETE | `/api/admin/<table>/<id>` | admin | Supprimer une ligne | 204, 401, 403, 404, 409 |
 
 Un recruteur est une personne connectée dont la fiche est rattachée à une entreprise : le serveur lit cette entreprise dans la base, jamais dans la requête.
 

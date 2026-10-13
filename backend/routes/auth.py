@@ -199,7 +199,7 @@ def me():
         return error
 
     if not data:
-        return jsonify({"error": "No field to update"}), 400
+        return jsonify({"error": "No fields to update"}), 400
 
     # L'adresse e-mail n'est pas modifiable ici : sans vérification de la nouvelle
     # adresse, on pourrait s'approprier celle d'une autre personne.

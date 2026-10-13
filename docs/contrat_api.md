@@ -391,6 +391,8 @@ closed
 
 Toutes ces modifications sont effectuées dans **une seule transaction**.
 
+Après la validation, chaque candidat reçoit un e-mail : retenu ou non retenu (voir [E-mails des candidatures](#e-mails-des-candidatures)). Le recruteur clôture ses propres annonces avec [`POST /api/recruiter/ads/<id>/closure`](#post-apirecruiteradsidclosure), selon les mêmes règles.
+
 ## Erreurs
 
 | Code | Message                                  | Cas                                                        |
@@ -683,6 +685,8 @@ person_id
 message
 status
 created_at
+receipt_email_sent_at
+decision_email_sent_at
 ```
 
 Champs modifiables :
@@ -701,7 +705,7 @@ person_id
 message
 ```
 
-Les champs `status` et `created_at` ne sont pas modifiables par le CRUD.
+Les champs `status` et `created_at` ne sont pas modifiables par le CRUD. Les champs `receipt_email_sent_at` et `decision_email_sent_at` non plus : seul l'envoi des e-mails les remplit (voir [E-mails des candidatures](#e-mails-des-candidatures)).
 
 ---
 
@@ -883,6 +887,66 @@ Corps : `{"token": "<jeton reçu dans le lien>"}`. Le lien est valable **24 heur
 | 400 | `Invalid value` | jeton inconnu, déjà utilisé ou expiré (même réponse dans les trois cas) |
 | 409 | `Email already used` | la fiche a reçu un compte entre-temps : le lien ne remplace jamais un mot de passe existant |
 
+---
+
+## Changement d'adresse e-mail
+
+Ajouté au J8. `PATCH /api/auth/me` refuse toujours `email` (400 `Unknown field: email`) : l'adresse ne change qu'en deux temps, et seulement quand la **nouvelle** adresse a été confirmée. Connaître une adresse ou utiliser une session laissée ouverte ne suffit donc jamais à détourner un compte.
+
+### Base de données
+
+```sql
+CREATE TABLE pending_email_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL UNIQUE,
+  new_email TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+);
+```
+
+Mêmes règles que `pending_registrations` : seule l'empreinte SHA-256 du jeton est gardée, le lien vaut **24 heures** et ne sert qu'**une fois**, une nouvelle demande remplace la précédente.
+
+### Demande : `POST /api/auth/email-change`
+
+Réservée aux personnes **connectées**. Corps :
+
+```json
+{
+  "email": "nouvelle.adresse@example.com",
+  "password": "mot de passe actuel"
+}
+```
+
+- `email` est normalisé comme à l'inscription (espaces retirés, minuscules).
+- `password` est le mot de passe **actuel** : il prouve que la personne devant l'écran est bien la titulaire du compte.
+- L'adresse de la fiche ne change pas à cette étape. Un lien `<APP_BASE_URL>/confirmation-email?token=…` part à la **nouvelle** adresse ; si `MAIL_ENABLED` vaut `0`, il est écrit dans le terminal de l'API. Le jeton n'apparaît jamais dans une réponse.
+
+| Code | Réponse | Cas |
+| --- | --- | --- |
+| 202 | `{"message": "Verification required"}` | demande enregistrée, lien envoyé |
+| 400 | `JSON object expected` | corps qui n'est pas un objet JSON |
+| 400 | `Invalid field: email` ou `Invalid field: password` | champ absent, vide, non textuel, trop long, ou e-mail sans `@` |
+| 400 | `Invalid value` | nouvelle adresse identique à l'adresse actuelle |
+| 401 | `Login required` | pas de session |
+| 401 | `Invalid credentials` | mot de passe actuel faux |
+| 409 | `Email already used` | adresse déjà présente dans `people`, avec ou sans compte |
+
+### Confirmation : `POST /api/auth/email-change/confirm`
+
+Corps : `{"token": "<jeton reçu dans le lien>"}`. Aucune session n'est exigée : le lien peut être ouvert sur un autre appareil, le jeton suffit à prouver que la nouvelle adresse est contrôlée.
+
+| Code | Réponse | Cas |
+| --- | --- | --- |
+| 200 | la fiche (`id`, `first_name`, `last_name`, `email`, `phone`, `role`), avec la nouvelle adresse | adresse confirmée et enregistrée |
+| 400 | `Invalid field: token` | jeton absent, vide ou non textuel |
+| 400 | `Invalid value` | jeton inconnu, déjà utilisé ou expiré (même réponse dans les trois cas) |
+| 409 | `Email already used` | la nouvelle adresse a été prise entre-temps par une autre fiche |
+
+La session en cours reste ouverte. Le mot de passe ne change pas.
+
 # Authentification et autorisations
 
 La fonction `current_user()` permet d'identifier l'utilisateur connecté grâce à la session.
@@ -931,7 +995,8 @@ L'accès aux routes d'administration, à la création d'annonces (`POST /api/ads
 | `POST /api/ads/<id>/closure`        | `@admin_required` |
 | `GET/POST/PATCH/DELETE /api/admin/…`| `@admin_required` |
 | `GET /api/me/applications`          | `@login_required` |
-| `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads` | vérification du recruteur (voir [Espace recruteur](#espace-recruteur)) |
+| `POST /api/auth/email-change`       | `@login_required` |
+| `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, `PATCH/DELETE /api/recruiter/ads/<id>`, `GET /api/recruiter/ads/<id>/applications`, `POST /api/recruiter/ads/<id>/closure` | vérification du recruteur (voir [Espace recruteur](#espace-recruteur)) |
 
 ---
 
@@ -992,6 +1057,12 @@ L'entreprise utilisée est **toujours** celle de la fiche de la personne connect
 | `PATCH /api/recruiter/company` | 200 : l'entreprise modifiée | 401, 403, 400 (voir ci-dessous) |
 | `GET /api/recruiter/ads` | 200 : toutes les annonces de l'entreprise, ouvertes et fermées, de la plus récente à la plus ancienne (`[]` possible) | 401, 403 |
 | `POST /api/recruiter/ads` | 201 : l'annonce créée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 400 (voir ci-dessous) |
+| `PATCH /api/recruiter/ads/<id>` (J8) | 200 : l'annonce modifiée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 404, 400, 409 (voir ci-dessous) |
+| `DELETE /api/recruiter/ads/<id>` (J8) | 204 | 401, 403, 404, 409 (voir ci-dessous) |
+| `GET /api/recruiter/ads/<id>/applications` (J8) | 200 : les candidatures de l'annonce (`[]` possible) | 401, 403, 404 |
+| `POST /api/recruiter/ads/<id>/closure` (J8) | 200 : l'annonce fermée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 404, 400, 409 (voir ci-dessous) |
+
+**Annonce d'une autre entreprise.** Sur les routes `/api/recruiter/ads/<id>…`, une annonce inexistante **et** une annonce d'une autre entreprise reçoivent la même réponse : 404 `Ad not found`. Un recruteur ne peut ni lire, ni modifier, ni clôturer, ni supprimer l'annonce d'une autre entreprise, et la réponse ne lui apprend même pas qu'elle existe.
 
 ### `GET /api/recruiter/company`
 
@@ -1054,6 +1125,95 @@ Mêmes champs que [`POST /api/ads`](#post-apiads), **sans** `company_id` ni `con
 | 400 | `Missing field: <nom>` | `title`, `short_description` ou `category_id` absent ou vide |
 | 400 | `Unknown field: <nom>` | `company_id`, `contact_id` ou tout champ hors de la liste |
 | 400 | `Unknown category_id` | catégorie inexistante |
+
+### `PATCH /api/recruiter/ads/<id>`
+
+Mêmes champs que `POST /api/recruiter/ads`, tous facultatifs : seuls les champs envoyés changent. `company_id`, `contact_id`, `status` et `created_at` ne sont jamais modifiables.
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 400 | `No fields to update` | corps vide |
+| 400 | `Unknown field: <nom>` | champ hors de la liste |
+| 400 | `Missing field: <nom>` | `title`, `short_description` ou `category_id` envoyé vide |
+| 400 | `Unknown category_id` | catégorie inexistante |
+| 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
+| 409 | `Ad is closed` | une annonce fermée ne se modifie plus |
+
+### `DELETE /api/recruiter/ads/<id>`
+
+Supprime une annonce **sans candidature**. Une annonce qui a reçu des candidatures se clôture, elle ne se supprime pas : les candidats gardent ainsi la trace de leur candidature dans « Mes candidatures ».
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 204 | — | annonce supprimée |
+| 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
+| 409 | `Ad has applications` | l'annonce a au moins une candidature |
+
+### `GET /api/recruiter/ads/<id>/applications`
+
+Les candidatures d'une annonce de l'entreprise, ouverte ou fermée, de la plus **ancienne** à la plus récente (`created_at` puis `id` croissants) : le recruteur répond d'abord à ceux qui attendent depuis le plus longtemps.
+
+```json
+[
+  {
+    "id": 5,
+    "first_name": "Alice",
+    "last_name": "Test",
+    "email": "alice.test@example.com",
+    "phone": null,
+    "message": "Bonjour, je suis intéressée.",
+    "status": "pending",
+    "created_at": "2026-10-09 14:12:00"
+  }
+]
+```
+
+Clés : `id`, `first_name`, `last_name`, `email`, `phone`, `message`, `status`, `created_at`. `id` est l'identifiant de la **candidature** : c'est lui qu'on envoie comme `accepted_application_id` à la clôture. Pas de pagination.
+
+### `POST /api/recruiter/ads/<id>/closure`
+
+Mêmes corps, mêmes règles et même transaction que la [clôture par l'administrateur](#clôture-dune-annonce) : sans candidature, `{}` suffit ; avec des candidatures, `accepted_application_id` est obligatoire, cette candidature passe à `accepted` et toutes les autres à `rejected`. Les e-mails partent après la validation.
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 400 | `Missing field: accepted_application_id` | des candidatures existent mais aucune n'est sélectionnée |
+| 400 | `Application does not belong to this ad` | la candidature sélectionnée appartient à une autre annonce |
+| 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
+| 409 | `Ad already closed` | annonce déjà fermée |
+
+---
+
+# E-mails des candidatures
+
+Ajouté au J8. Les fonctions de `backend/mailer.py` sont appelées par les routes, **après** le `commit()` : un e-mail ne part que si la base a bien enregistré, et un e-mail qui échoue ne fait jamais échouer la route (la réponse HTTP reste la même).
+
+| Événement | Destinataire | Fonction | Suivi dans `applications` |
+| --- | --- | --- | --- |
+| Candidature créée (`POST /api/ads/<id>/applications`) | le candidat | `notify_application_received` | `receipt_email_sent_at` |
+| Annonce clôturée (`POST /api/ads/<id>/closure` ou `POST /api/recruiter/ads/<id>/closure`) | chaque candidat : retenu ou non retenu | `notify_closure` | `decision_email_sent_at` |
+
+```sql
+receipt_email_sent_at TEXT,   -- date d'envoi de l'accusé de réception ; NULL : pas envoyé
+decision_email_sent_at TEXT   -- date d'envoi de la réponse (retenu ou non) ; NULL : pas envoyé
+```
+
+- La colonne reçoit `datetime('now')` **seulement si** l'envoi a réussi (`send_email` a renvoyé `True`).
+- Avec `MAIL_ENABLED=0`, rien n'est envoyé : les colonnes restent `NULL`, et une ligne s'affiche dans le terminal de l'API.
+- Un `NULL` permet de retrouver les e-mails à renvoyer : `SELECT id FROM applications WHERE status != 'pending' AND decision_email_sent_at IS NULL`.
+- Base existante, sans la réinitialiser :
+
+  ```sql
+  ALTER TABLE applications ADD COLUMN receipt_email_sent_at TEXT;
+  ALTER TABLE applications ADD COLUMN decision_email_sent_at TEXT;
+  ```
+
+---
+
+# Changements J8
+
+- Espace recruteur : `PATCH` et `DELETE /api/recruiter/ads/<id>`, `GET /api/recruiter/ads/<id>/applications`, `POST /api/recruiter/ads/<id>/closure` ; une annonce d'une autre entreprise répond 404 `Ad not found`.
+- E-mails des candidatures branchés (accusé de réception, retenu, non retenu) ; colonnes `receipt_email_sent_at` et `decision_email_sent_at` dans `applications`, lisibles par le CRUD admin, non modifiables.
+- Changement d'adresse e-mail confirmé par un lien envoyé à la nouvelle adresse : `POST /api/auth/email-change`, `POST /api/auth/email-change/confirm`, table `pending_email_changes`.
 
 ---
 
