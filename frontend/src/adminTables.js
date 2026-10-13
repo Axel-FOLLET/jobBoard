@@ -22,7 +22,7 @@ export const tables = {
     addLabel: "Ajouter une personne",
     editTitle: (row) => `Modifier ${row.first_name} ${row.last_name}`,
     editableFields: ["first_name", "last_name", "email", "phone", "role"],
-    columns: [{ key: "id", label: "Identifiant" }, { key: "first_name", label: "Prénom" }, { key: "last_name", label: "Nom" }, { key: "email", label: "Email" }, { key: "phone", label: "Téléphone" }, { key: "role", label: "Rôle" }],
+    columns: [{ key: "id", label: "Identifiant" }, { key: "first_name", label: "Prénom" }, { key: "last_name", label: "Nom" }, { key: "email", label: "Adresse e-mail" }, { key: "phone", label: "Téléphone" }, { key: "role", label: "Rôle" }],
   },
   ads: {
     title: "Annonces",
@@ -30,7 +30,7 @@ export const tables = {
     editTitle: (row) => `Modifier ${row.title}`,
     editableFields: ["title", "short_description", "description", "salary", "location", "working_time", "contract_type", "company_id", "category_id", "contact_id"],
     // status et created_at sont affichés mais absents de editableFields : l'API les refuse en écriture.
-    columns: [{ key: "id", label: "Identifiant" }, { key: "title", label: "Titre" }, { key: "short_description", label: "Description courte" }, { key: "description", label: "Description" }, { key: "salary", label: "Salaire" }, { key: "location", label: "Localisation" }, { key: "working_time", label: "Temps de travail" }, { key: "contract_type", label: "Type de contrat" }, { key: "status", label: "Statut" }, { key: "created_at", label: "Date de création" }, { key: "company_id", label: "Identifiant de l'entreprise" }, { key: "category_id", label: "Identifiant de la catégorie" }, { key: "contact_id", label: "Identifiant du contact" }],
+    columns: [{ key: "id", label: "Identifiant" }, { key: "title", label: "Titre" }, { key: "short_description", label: "Description courte" }, { key: "description", label: "Description" }, { key: "salary", label: "Salaire" }, { key: "location", label: "Lieu" }, { key: "working_time", label: "Temps de travail" }, { key: "contract_type", label: "Type de contrat" }, { key: "status", label: "Statut" }, { key: "created_at", label: "Date de création" }, { key: "company_id", label: "Identifiant de l'entreprise" }, { key: "category_id", label: "Identifiant de la catégorie" }, { key: "contact_id", label: "Identifiant du contact" }],
   },
   applications: {
     title: "Candidatures",

@@ -1,11 +1,10 @@
 // Choix des postes mis en avant sur l'accueil du recruteur.
-// Fonctions pures : elles ne connaissent ni React ni l'API, elles trient une liste de postes.
-//
-// Chaque poste attendu en entrée :
+
+// COn demande des données au back :
 //   { id, title, applications_count, oldest_unanswered_at }
-// où oldest_unanswered_at est la date de la candidature sans réponse la plus ancienne
-// (null si le recruteur a répondu à tout le monde sur ce poste).
+// ...
 // Aucune route de l'API ne renvoie encore ces deux champs : voir docs/contrat_api.md.
+
 
 // Deux semaines, exprimées en millisecondes.
 const DELAI_SANS_REPONSE = 14 * 24 * 60 * 60 * 1000

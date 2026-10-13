@@ -3,7 +3,12 @@ import { useState } from 'react'
 import Form from './Form'
 import { apiFetch } from '../api.js'
 
-export default function JobOffer({ id, company, title, shortDescription, location }) {
+// "2026-10-08 18:15:02" (UTC, comme le renvoie SQLite) -> "8 octobre 2026", comme dans ApplicationsPage.jsx.
+function formatDate(value) {
+  return new Date(value.replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+export default function JobOffer({ id, company, title, shortDescription, location, contractType }) {
   // Détail et formulaire fermés au départ.
   const [showDetails, setShowDetails] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -39,13 +44,19 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
 
   return (
     <div className="job-offer">
-      <h2>{company}</h2>
-      <p>{title}</p>
+      {/* Le poste est le titre de la carte ; l'entreprise, au-dessus, en petite ligne.
+          Le titre est un bouton : il ouvre et referme le détail, ce qui évite un deuxième bouton par carte. */}
+      <p className="offer-company">{company}</p>
+      <h2>
+        <button type="button" className="offer-title" aria-expanded={showDetails} onClick={handleClick}>{title}</button>
+      </h2>
       <p>{shortDescription}</p>
-      <p>{location}</p>
-      {/* Deux boutons indépendants : le détail et la candidature s'ouvrent séparément. */}
+      {/* Lieu et contrat sur une ligne de texte, séparés par un point médian ; absents s'ils ne sont pas renseignés. */}
+      {(location || contractType) && (
+        <p className="offer-meta">{[location, contractType].filter(Boolean).join(' · ')}</p>
+      )}
+      {/* Une seule action par carte : la candidature. */}
       <div className="offer-actions">
-        <button className="button-secondary" onClick={handleClick}>{showDetails ? 'Voir moins' : 'En savoir plus'}</button>
         <button onClick={() => setShowForm(!showForm)}>{showForm ? 'Annuler' : 'Postuler'}</button>
       </div>
       {showForm && <Form id={id} onClose={() => setShowForm(false)} />}
@@ -53,14 +64,13 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
       {showDetails && error && <p>{error}</p>}
       {/* Ouvert ET reçu : sinon details.description planterait sur null. */}
       {showDetails && details && (
-        <div>
+        <div className="offer-details">
           <p className="description">{details.description}</p>
-          <p>{details.salary ? `Salaire : ${details.salary.toLocaleString('fr-FR')}€ brut par an` : 'Salaire non communiqué'}</p>
-          <p>{details.working_time}</p>
-          <p>{details.contract_type}</p>
-          <p>{details.category}</p>
-          {/* created_at est une date suivie d'une heure : les dix premiers caractères suffisent. */}
-          <p>Publiée le {details.created_at.slice(0, 10)}</p>
+          {/* Espace avant €, selon l'usage français. Le contrat figure déjà dans les pastilles. */}
+          <p>{details.salary ? `Salaire : ${details.salary.toLocaleString('fr-FR')} € brut par an` : 'Salaire non communiqué'}</p>
+          {details.working_time && <p>Temps de travail : {details.working_time}</p>}
+          {details.category && <p>Catégorie : {details.category}</p>}
+          <p>Publiée le {formatDate(details.created_at)}</p>
         </div>
       )}
     </div>

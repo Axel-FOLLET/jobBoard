@@ -1,8 +1,9 @@
-// Habillage commun à toutes les pages : en-tête, navigation, puis la page courante.
+// Habillage commun à toutes les pages : en-tête, navigation, la page courante, puis le pied de page.
 import { useContext, useState } from 'react'
 import { AuthContext } from '../AuthContext'
 import { Outlet, NavLink, Link, useNavigate } from 'react-router'
 import { apiFetch } from '../api.js'
+import Footer from './Footer.jsx'
 
 export default function Layout() {
   const { user, setUser } = useContext(AuthContext)
@@ -57,6 +58,7 @@ export default function Layout() {
       </header>
       {/* Outlet : la page correspondant à l'URL s'affiche ici. */}
       <Outlet />
+      <Footer />
     </div>
   )
 }

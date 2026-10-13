@@ -3,7 +3,7 @@
 export const FIELD_NAMES = {
     first_name: 'prénom',
     last_name: 'nom',
-    email: 'email',
+    email: 'adresse e-mail',
     password: 'mot de passe',
     phone: 'téléphone',
 }

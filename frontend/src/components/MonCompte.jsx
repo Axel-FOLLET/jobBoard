@@ -68,7 +68,7 @@ export default function MonCompte({ user }) {
 
             // Un message français par code de l'API ; 401 ajoute un lien de reconnexion.
             if (httpStatus === 409) {
-                setSendError('Cet email est déjà utilisé par un autre compte.')
+                setSendError('Cette adresse e-mail est déjà utilisée par un autre compte.')
             } else if (httpStatus === 401) {
                 setSendError('Votre session a expiré.')
                 setNeedLogin(true)
@@ -91,31 +91,34 @@ export default function MonCompte({ user }) {
     }
 
     // noValidate : les messages du navigateur sont remplacés par les nôtres, en français.
+    // form-columns (forms.css) : Nom/Prénom puis Téléphone/Adresse e-mail, par paires.
     return (
-        <form onSubmit={handleSubmit} noValidate>
+        <form className="form-columns" onSubmit={handleSubmit} noValidate>
             <label>
-                Nom :
+                Nom
                 <input type="text" name="surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
             </label>
 
             <label>
-                Prénom :
+                Prénom
                 <input type="text" name="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             </label>
 
             <label>
-                Téléphone :
+                Téléphone (facultatif)
                 <input type="text" name="telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
             </label>
 
             <label>
-                Email :
+                Adresse e-mail
                 <input type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
 
-            <button type="submit" disabled={status === 'sending'}>
-                {status === 'sending' ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
+            <div className="form-actions">
+                <button type="submit" disabled={status === 'sending'}>
+                    {status === 'sending' ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+            </div>
             {/* aria-live : un lecteur d'écran annonce le résultat sans action de l'utilisateur. */}
             <div aria-live="polite">
                 {status === 'sent' && <p>Vos informations sont enregistrées.</p>}

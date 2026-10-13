@@ -35,15 +35,15 @@ export default function ApplicationsPage() {
                 <Link to="/login">Connectez-vous pour voir vos candidatures.</Link>
             ) : (
                 <>
-                <p>Bienvenue, {user.first_name} ! Voici vos candidatures :</p>
+                <p>Bonjour {user.first_name}, voici vos candidatures.</p>
                     {applications.length === 0 ? (
-                        <Link to="/offres">Vous n'avez pas encore candidaté. Trouvez votre futur emploi !</Link>
+                        <Link to="/offres">Vous n'avez pas encore candidaté. Découvrir les offres</Link>
                     ) : (<ul>
                             {applications.map((application) => (
                                 <li key={application.id}>
                                     <h3>{application.title}</h3>
                                     <p>Entreprise : {application.company}</p>
-                                    <p>Date de création : {formatDate(application.created_at)}</p>
+                                    <p>Envoyée le {formatDate(application.created_at)}</p>
                                     {/* Statuts de l'API traduits pour l'écran : pending, accepted, sinon refusée. */}
                                     <p className={`application-status status-${application.status}`}>Statut : {application.status === 'pending' ? 'En attente' : application.status === 'accepted' ? 'Retenue' : 'Refusée'}</p>
                                 </li>

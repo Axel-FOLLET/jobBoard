@@ -1,7 +1,6 @@
 // Table des routes : une URL, un composant de page.
 import { Routes, Route } from 'react-router'
 
-import './App.css'
 import Layout from './components/Layout.jsx'
 import JobBoardPage from './pages/JobBoardPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
