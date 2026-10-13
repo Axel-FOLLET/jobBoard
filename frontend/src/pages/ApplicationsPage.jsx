@@ -12,27 +12,33 @@ function formatDate(value) {
 export default function ApplicationsPage() {
     const { user } = useContext(AuthContext);
     const [applications, setApplications] = useState([]);
+    const [errorStatus, setErrorStatus] = useState(null);
 
     useEffect(() => {
-        async function fetchApplications() {
-            try {
-                // Lit pour l'instant un fichier de démonstration, pas l'API /api/me/applications.
-                const { ok, data } = await apiFetch('/mock/my-applications.json');
-                if (ok) setApplications(data);
-            } catch (error) {
-                // En cas d'échec la liste reste vide : la page affiche « pas encore candidaté ».
-                console.error('Error fetching applications:', error);
+        if (user === null) return;
+            async function fetchApplications() {
+                  // Lit l'API /api/me/applications.
+                const { ok, status, data, error } = await apiFetch('/api/me/applications');
+                if (ok) {
+                    setApplications(data);
+                    setErrorStatus(null);
+                } else {
+                    // 401 = session expirée, autre code ou 0 = API indisponible : géré dans l'affichage.
+                    setErrorStatus(status);
+                    console.error('Error fetching applications:', status, error);
+                }
             }
-        }
         fetchApplications();
-    }, []);
+    }, [user]);
 
     return (
         <div className="applications-page">
             <h1>Mes candidatures</h1>
             {/* user à null = visiteur non connecté : on propose la connexion plutôt que la liste. */}
-            {user === null ? (
+            {user === null || errorStatus === 401 ? (
                 <Link to="/login">Connectez-vous pour voir vos candidatures.</Link>
+            ) : errorStatus !== null ? (
+                <p>Impossible de charger vos candidatures pour le moment.</p>
             ) : (
                 <>
                 <p>Bonjour {user.first_name}, voici vos candidatures.</p>

@@ -1,6 +1,6 @@
 // Choix des postes mis en avant sur l'accueil du recruteur.
 
-// COn demande des données au back :
+// On demande des données au back :
 //   { id, title, applications_count, oldest_unanswered_at }
 // ...
 // Aucune route de l'API ne renvoie encore ces deux champs : voir docs/contrat_api.md.

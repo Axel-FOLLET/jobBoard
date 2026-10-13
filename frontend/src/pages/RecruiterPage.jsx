@@ -2,17 +2,35 @@
 // dont un candidat attend une réponse depuis plus de deux semaines.
 import { Link } from 'react-router'
 import { postesLesPlusRepondus, postesSansReponse } from '../recruiterSelection.js'
+import { useEffect, useState } from 'react'
+import { apiFetch } from '../api.js'
 
 export default function RecruiterPage() {
-  // En attente de la route de l'API qui renvoie les postes de l'entreprise connectée
-  // avec applications_count et oldest_unanswered_at : la liste reste vide pour l'instant.
-  const postes = []
+  // Annonces de l'entreprise du recruteur connecté (le serveur la lit dans la session).
+  const [postes, setPostes] = useState([])
+  const [loadError, setLoadError] = useState(false)
+
+  useEffect(() => {
+    async function fetchPostes() {
+      const { ok, status, data, error } = await apiFetch('/api/recruiter/ads')
+      if (ok) {
+        setPostes(data)
+      } else {
+        // 401 et 403 seront gérés par RecruiterLayout (Task03) ; ici, un message général.
+        setLoadError(true)
+        console.error('Error fetching recruiter ads:', status, error)
+      }
+    }
+    fetchPostes()
+  }, [])
+
   const plusRepondus = postesLesPlusRepondus(postes)
   const sansReponse = postesSansReponse(postes)
 
   return (
     <>
       <h1>Espace recruteur</h1>
+      {loadError && <p>Impossible de charger vos postes pour le moment.</p>}
 
       {/* Deux colonnes côte à côte, chacune avec ses cartes de postes empilées. */}
       <div className="recruiter-overview">
