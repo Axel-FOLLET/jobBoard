@@ -1,0 +1,40 @@
+/* Espace recruteur, vue d'ensemble (RecruiterPage.jsx) : deux colonnes de cartes de postes. */
+
+/* Deux colonnes de même largeur, alignées en haut. */
+.recruiter-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 32px;
+}
+
+/* Titres des colonnes sans grande marge haute, pour démarrer à la même hauteur. */
+.recruiter-overview h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+/* Cartes empilées, sans puces. */
+.overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Carte d'un poste, comme la carte d'offre (offers.css). */
+.overview-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 20px 24px;
+  border: 1px solid var(--color-line);
+}
+
+/* Une seule colonne sur téléphone et petite tablette. */
+@media (max-width: 700px) {
+  .recruiter-overview {
+    grid-template-columns: 1fr;
+  }
+}

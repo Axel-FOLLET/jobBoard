@@ -8,7 +8,7 @@ import { apiFetch } from '../api.js'
 const FIELD_NAMES = {
     first_name: 'prénom',
     last_name: 'nom',
-    email: 'email',
+    email: 'adresse e-mail',
     message: 'message',
 }
 
@@ -61,9 +61,9 @@ export default function Form({ id, onClose }) {
             }
 
             if (email.trim() === '') {
-                newErrors.email = 'Veuillez indiquer un email valide.'
+                newErrors.email = 'Veuillez indiquer votre adresse e-mail.'
             } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-                newErrors.email = 'Votre email doit ressembler à nom@exemple.fr.'
+                newErrors.email = 'Votre adresse e-mail doit ressembler à nom@exemple.fr.'
             }
         }
 
@@ -115,7 +115,7 @@ export default function Form({ id, onClose }) {
             } else if (httpStatus === 409 && apiError === 'Ad is closed') {
                 setSendError('Cette annonce est clôturée : les candidatures ne sont plus possibles.')
             } else if (httpStatus === 401) {
-                setSendError('Cet email correspond à un compte. Connectez-vous pour candidater.')
+                setSendError('Cette adresse e-mail correspond à un compte : connectez-vous pour candidater.')
                 setNeedLogin(true)
             } else {
                 throw new Error(`Unexpected response ${httpStatus}`)
@@ -137,28 +137,28 @@ export default function Form({ id, onClose }) {
             ) : (
                 <>
                     <label>
-                        Nom :
+                        Nom
                         <input type="text" name="surname" value={surname}
                             onChange={(event) => setSurname(event.target.value)} />
                     </label>
                     {errors.surname && <p>{errors.surname}</p>}
 
                     <label>
-                        Prénom :
+                        Prénom
                         <input type="text" name="firstName" value={firstName}
                             onChange={(event) => setFirstName(event.target.value)} />
                     </label>
                     {errors.firstName && <p>{errors.firstName}</p>}
 
                     <label>
-                        Téléphone :
+                        Téléphone (facultatif)
                         <input type="text" name="telephone" value={telephone}
                             onChange={(event) => setTelephone(event.target.value)} />
                     </label>
                     {errors.telephone && <p>{errors.telephone}</p>}
 
                     <label>
-                        Email :
+                        Adresse e-mail
                         <input type="email" name="email" value={email}
                             onChange={(event) => setEmail(event.target.value)} />
                     </label>
@@ -167,7 +167,7 @@ export default function Form({ id, onClose }) {
             )}
 
             <label>
-                Message :
+                Message
                 <textarea name="message" value={message}
                     onChange={(event) => setMessage(event.target.value)} />
             </label>
@@ -184,7 +184,7 @@ export default function Form({ id, onClose }) {
                         </svg>
                         Envoyée
                     </>
-                ) : status === 'sending' ? 'Envoi en cours…' : 'Envoyer'}
+                ) : status === 'sending' ? 'Envoi en cours…' : 'Envoyer ma candidature'}
             </button>
 
             {/* aria-live : un lecteur d'écran annonce le résultat sans action de l'utilisateur. */}

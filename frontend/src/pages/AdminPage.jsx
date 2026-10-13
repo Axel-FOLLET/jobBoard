@@ -5,6 +5,11 @@ import { Link } from "react-router";
 import { apiFetch } from "../api.js";
 import { tables } from "../adminTables.js";
 
+// Textes longs : zone de texte dans le panneau, une seule ligne coupée dans le tableau.
+const LONG_FIELDS = ["description", "short_description", "message"];
+// Chiffres seuls : clavier numérique sur téléphone.
+const NUMERIC_FIELDS = ["siren", "salary", "company_id", "category_id", "contact_id", "ad_id", "person_id"];
+
 export default function AdminPage() {
   const { user } = useContext(AuthContext);
   // Table affichée et pagination : tout changement relance l'appel réseau ci-dessous.
@@ -54,6 +59,20 @@ export default function AdminPage() {
     };
     fetchData();
   }, [selectedTable, user, currentPage, perPage, refresh]);
+
+  // Panneau ouvert : la touche Échap le ferme, sauf pendant un envoi.
+  const formOpen = isCreating || editingRow !== null;
+  useEffect(() => {
+    if (!formOpen) return;
+    function handleKey(e) {
+      if (e.key === "Escape" && !editSaving) {
+        setEditingRow(null);
+        setIsCreating(false);
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [formOpen, editSaving]);
 
   // --- Suppression ---
   async function handleDelete(id) {
@@ -189,7 +208,7 @@ export default function AdminPage() {
           siren: "Le SIREN est obligatoire.",
           first_name: "Le prénom est obligatoire.",
           last_name: "Le nom est obligatoire.",
-          email: "L'adresse email est obligatoire.",
+          email: "L'adresse e-mail est obligatoire.",
           title: "Le titre est obligatoire.",
           short_description: "La description courte est obligatoire.",
           company_id: "L'entreprise est obligatoire.",
@@ -241,58 +260,80 @@ export default function AdminPage() {
     setIsCreating(true);
   }
 
+  // Fermer le panneau d'ajout ou de modification, sauf pendant un envoi.
+  function closeForm() {
+    if (editSaving) return;
+    setEditingRow(null);
+    setIsCreating(false);
+  }
+
   // Un seul formulaire pour l'ajout et la modification, construit depuis editableFields.
+  // Il s'ouvre dans un panneau à droite : le tableau reste visible derrière, les boutons restent en bas du panneau.
   function renderForm() {
     return (
-      <form onSubmit={handleUpdate}>
-        <h3>
-          {isCreating
-            ? `Ajouter — ${tables[selectedTable].title}`
-            : tables[selectedTable].editTitle(editingRow)}
-        </h3>
-
-        {/* Un champ par entrée de editableFields ; le libellé vient de columns. */}
-        {tables[selectedTable].editableFields.map((field) => {
-          const column = tables[selectedTable].columns.find(
-            (column) => column.key === field
-          );
-
-          return (
-            <label key={field}>
-              {column.label}
-              <input
-                type="text"
-                inputMode={field === "siren" ? "numeric" : undefined}
-                disabled={editSaving}
-                value={editValues[field] ?? ""}
-                onChange={(e) =>
-                  setEditValues((prev) => ({
-                    ...prev,
-                    [field]: e.target.value,
-                  }))
-                }
-              />
-            </label>
-          );
-        })}
-
-        {editError && <p role="alert">{editError}</p>}
-
-        <button type="submit" disabled={editSaving}>
-          {editSaving ? "Enregistrement…" : "Enregistrer"}
-        </button>
-
-        <button
-          type="button"
-          disabled={editSaving}
-          onClick={() => {
-            setEditingRow(null);
-            setIsCreating(false);
-          }}
+      <div className="admin-drawer-backdrop" onClick={closeForm}>
+        {/* stopPropagation : un clic dans le panneau ne doit pas le fermer, seul un clic sur le fond le fait. */}
+        <aside
+          className="admin-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-drawer-title"
+          onClick={(e) => e.stopPropagation()}
         >
-          Annuler
-        </button>
-      </form>
+          <form onSubmit={handleUpdate}>
+            <h2 id="admin-drawer-title">
+              {isCreating
+                ? tables[selectedTable].addLabel
+                : tables[selectedTable].editTitle(editingRow)}
+            </h2>
+
+            <div className="admin-drawer-fields">
+              {/* Un champ par entrée de editableFields ; le libellé vient de columns. Les textes longs ont une zone de texte. */}
+              {tables[selectedTable].editableFields.map((field, index) => {
+                const column = tables[selectedTable].columns.find(
+                  (column) => column.key === field
+                );
+                const isLong = LONG_FIELDS.includes(field);
+                const props = {
+                  autoFocus: index === 0,
+                  disabled: editSaving,
+                  value: editValues[field] ?? "",
+                  onChange: (e) =>
+                    setEditValues((prev) => ({
+                      ...prev,
+                      [field]: e.target.value,
+                    })),
+                };
+
+                return (
+                  <label key={field}>
+                    {column.label}
+                    {isLong ? (
+                      <textarea {...props} />
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode={NUMERIC_FIELDS.includes(field) ? "numeric" : undefined}
+                        {...props}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="admin-drawer-actions">
+              {editError && <p role="alert">{editError}</p>}
+              <button type="submit" disabled={editSaving}>
+                {editSaving ? "Enregistrement…" : "Enregistrer"}
+              </button>
+              <button type="button" className="button-secondary" disabled={editSaving} onClick={closeForm}>
+                Annuler
+              </button>
+            </div>
+          </form>
+        </aside>
+      </div>
     );
   }
 
@@ -337,21 +378,6 @@ export default function AdminPage() {
           <option value={50}>50 par page</option>
         </select>
       </label>
-      <div className="pagination-buttons">
-        {/* Pagination masquée tant que le nombre de pages est inconnu. */}
-        {totalPages > 0  && (
-          <>
-          <button type="button" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-            Précédent
-          </button>
-          <span> Page {currentPage} sur {totalPages} </span>
-          <button type="button" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-            Suivant
-          </button>
-          </>
-        )}
-
-      </div>
       </div>
       <div className="admin-add">
         <button
@@ -362,8 +388,8 @@ export default function AdminPage() {
           {tables[selectedTable].addLabel}
         </button>
       </div>
-      {/* Formulaire d'ajout au-dessus du tableau ; celui de modification s'ouvre sous la ligne. */}
-      {isCreating && renderForm()}
+      {/* Ajout ou modification : un seul panneau latéral, au-dessus de la page. */}
+      {formOpen && renderForm()}
       {/* Quatre affichages possibles : chargement, erreur, tableau vide, puis les données. */}
       {loading ? (
         <p>Chargement…</p>
@@ -372,44 +398,59 @@ export default function AdminPage() {
       ) : rows.length === 0 ? (
         <p>Aucune donnée disponible pour l'instant.</p>
       ) : (
+        <>
         <div className="table-scroll" role="region" aria-label={tables[selectedTable].title} tabIndex={0}>
         <table>
           <thead>
             <tr>
-              {/* Un en-tête par colonne ; les deux colonnes de boutons n'en ont pas. */}
+              {/* Un en-tête par colonne ; celui des boutons n'est lu que par les lecteurs d'écran. */}
               {tables[selectedTable].columns.map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
+              <th className="col-actions"><span className="visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <Fragment key={row.id}>
                 <tr>
+                  {/* Textes longs coupés sur une ligne ; le texte entier s'affiche au survol et dans le panneau. */}
                   {tables[selectedTable].columns.map((column) => (
-                    <td key={column.key}>{row[column.key]}</td>
+                    LONG_FIELDS.includes(column.key)
+                      ? <td key={column.key} className="cell-clip" title={row[column.key] ?? ""}>{row[column.key]}</td>
+                      : <td key={column.key}>{row[column.key]}</td>
                   ))}
-                  <td><button className="button-danger" type="button" onClick={() => handleDelete(row.id)}>Supprimer</button></td>
-                  <td><button type="button" disabled={editSaving} onClick={() => {
-                    setEditingRow(row);
-                    setEditValues({ ...row });
-                    setEditError(null);
-                    setIsCreating(false);
-                  }}>Modifier</button></td>
+                  {/* Actions groupées dans une seule cellule, la modification d'abord ; colonne collée à droite (admin.css). */}
+                  <td className="col-actions">
+                    <div className="row-actions">
+                      <button type="button" className="button-secondary" disabled={editSaving} onClick={() => {
+                        setEditingRow(row);
+                        setEditValues({ ...row });
+                        setEditError(null);
+                        setIsCreating(false);
+                      }}>Modifier</button>
+                      <button className="button-danger" type="button" onClick={() => handleDelete(row.id)}>Supprimer</button>
+                    </div>
+                  </td>
                 </tr>
-                {/* Ligne en modification : le formulaire s'ouvre juste en dessous, sur toute la largeur. */}
-                {editingRow?.id === row.id && (
-                  <tr>
-                    <td colSpan={tables[selectedTable].columns.length + 2}>
-                      {renderForm()}
-                    </td>
-                  </tr>
-                )}
               </Fragment>
             ))}
           </tbody>
         </table>
         </div>
+        {/* Pagination centrée sous le tableau, masquée tant que le nombre de pages est inconnu. */}
+        {totalPages > 0 && (
+          <div className="pagination-buttons">
+            <button className="button-secondary" type="button" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+              Précédent
+            </button>
+            <span>Page {currentPage} sur {totalPages}</span>
+            <button className="button-secondary" type="button" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+              Suivant
+            </button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

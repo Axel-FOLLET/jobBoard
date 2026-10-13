@@ -1,6 +1,3 @@
-// Point d'accès unique à l'API : les options d'appel, la lecture du corps JSON et la
-// traduction des refus du contrat (docs/contrat_api.md) sont écrites ici une seule fois.
-
 /**
  * Appelle l'API et renvoie toujours la même forme de résultat, sans jamais lever
  * d'exception :
@@ -10,6 +7,7 @@
  *   error  : le message renvoyé par l'API en cas de refus, sinon ''
  *   total  : l'en-tête X-Total-Count, ou null s'il est absent
  */
+
 export async function apiFetch(path, { body, headers, ...options } = {}) {
   // credentials : le cookie de session accompagne chaque appel, y compris côté administration.
   const init = { credentials: 'include', ...options, headers: { ...headers } }

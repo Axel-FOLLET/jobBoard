@@ -49,10 +49,10 @@ export default function AccountPage() {
         }
 
         if (email.trim() === '') {
-            newErrors.email = "Veuillez indiquer un email valide."
+            newErrors.email = "Veuillez indiquer votre adresse e-mail."
         }
         else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-            newErrors.email = "Votre email doit ressembler à nom@exemple.fr."
+            newErrors.email = "Votre adresse e-mail doit ressembler à nom@exemple.fr."
         }
 
         if (password.trim() === '') {
@@ -113,7 +113,7 @@ export default function AccountPage() {
 
             // Un message français par code de l'API ; 409 propose la connexion.
             if (httpStatus === 409) {
-                setSendError('Cet email a déjà un compte. Connectez-vous.')
+                setSendError('Cette adresse e-mail a déjà un compte : connectez-vous.')
                 setNeedLogin(true)
             } else if (httpStatus === 400) {
                 if (apiError === 'Password must be at least 8 characters') {
@@ -140,52 +140,69 @@ export default function AccountPage() {
         return <Navigate to="/espace-candidat/informations" replace />
     }
 
+    // Même cadre que la connexion (LoginPage.jsx) : un titre, puis le formulaire sans carte.
+    // form-columns (forms.css) : Nom/Prénom puis Téléphone/E-mail par paires, le mot de passe seul sur sa ligne.
+    // Chaque champ est dans un div avec son message d'erreur, pour que la paire reste alignée quand un message s'affiche.
     // noValidate : les messages du navigateur sont remplacés par les nôtres, en français.
     return (
-        <form className="registration-form" onSubmit={handleSubmit} noValidate>
+      <div className="page account-page">
+        <h1>Créer un compte</h1>
+        <form className="form-columns" onSubmit={handleSubmit} noValidate>
 
-            <label>
-                Nom :
-                <input type="text" name="surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
-            </label>
-            {errors.surname && <p>{errors.surname}</p>}
+            <div>
+                <label>
+                    Nom
+                    <input type="text" name="surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
+                </label>
+                {errors.surname && <p>{errors.surname}</p>}
+            </div>
 
-            <label>
-                Prénom :
-                <input type="text" name="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            </label>
-            {errors.firstName && <p>{errors.firstName}</p>}
+            <div>
+                <label>
+                    Prénom
+                    <input type="text" name="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </label>
+                {errors.firstName && <p>{errors.firstName}</p>}
+            </div>
 
-            <label>
-                Téléphone :
-                <input type="text" name="telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
-            </label>
-            {errors.telephone && <p>{errors.telephone}</p>}
+            <div>
+                <label>
+                    Téléphone (facultatif)
+                    <input type="text" name="telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
+                </label>
+                {errors.telephone && <p>{errors.telephone}</p>}
+            </div>
 
-            <label>
-                Email :
-                <input type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </label>
-            {errors.email && <p>{errors.email}</p>}
+            <div>
+                <label>
+                    Adresse e-mail
+                    <input type="email" name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </label>
+                {errors.email && <p>{errors.email}</p>}
+            </div>
 
-            <label>
-                Mot de passe :
-                <input type="password" name="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </label>
-            {errors.password && <p>{errors.password}</p>} 
+            <div className="field-wide">
+                <label>
+                    Mot de passe
+                    <input type="password" name="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </label>
+                {errors.password && <p>{errors.password}</p>}
+            </div>
 
             {/* Bouton verrouillé pendant l'envoi : spinner, puis coche. */}
-            <button type="submit" disabled={status === 'sending' || status === 'sent' || status === 'pending'}>
-                {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
-                {status === 'sent' || status === 'pending' ? (
-                    <>
-                        <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
-                            <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
-                        </svg>
-                        {status === 'sent' ? 'Compte créé' : 'Lien envoyé'}
-                    </>
-                ) :status === 'sending' ? 'Création en cours…' : 'Créer un compte'}
-            </button>
+            <div className="form-actions">
+                <button type="submit" disabled={status === 'sending' || status === 'sent' || status === 'pending'}>
+                    {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
+                    {status === 'sent' || status === 'pending' ? (
+                        <>
+                            <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
+                                <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
+                            </svg>
+                            {status === 'sent' ? 'Compte créé' : 'Lien envoyé'}
+                        </>
+                    ) :status === 'sending' ? 'Création en cours…' : 'Créer un compte'}
+                </button>
+            </div>
             <div aria-live="polite">
                 {status === 'sent' && (
                     <p>Votre compte est créé. Vous pouvez vous connecter. <Link to="/login">Se connecter</Link></p>
@@ -204,5 +221,6 @@ export default function AccountPage() {
                 )}
             </div>
         </form>
+      </div>
     )
 }

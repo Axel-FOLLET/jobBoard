@@ -32,7 +32,7 @@ export default function LoginPage() {
     const newErrors = {}
 
     if (email.trim() === '') {
-        newErrors.email = "Veuillez indiquer votre email."
+        newErrors.email = "Veuillez indiquer votre adresse e-mail."
     }
 
     if (password.trim() === '') {
@@ -77,9 +77,9 @@ export default function LoginPage() {
             setStatus('error')
 
             if (httpStatus === 400) {
-                setSendError("Merci de vérifier l'email et le mot de passe.")
+                setSendError("Merci de vérifier l'adresse e-mail et le mot de passe.")
             } else if (httpStatus === 401) {
-                setSendError('Email ou mot de passe incorrect.')
+                setSendError('Adresse e-mail ou mot de passe incorrects.')
             } else if (httpStatus === 429) {
                 // Trop de tentatives : l'API renvoie l'attente restante dans l'en-tête Retry-After.
                 const minutes = retryAfter === null ? null : Math.ceil(retryAfter / 60)
@@ -100,10 +100,11 @@ export default function LoginPage() {
   return (
     <div className="page account-page">
       <h1>Connexion</h1>
-      {/* noValidate : les messages du navigateur sont remplacés par les nôtres, en français. */}
-      <form onSubmit={handleSubmit} noValidate>
-        <div>
-          <label htmlFor="email">Email :</label>
+      {/* noValidate : les messages du navigateur sont remplacés par les nôtres, en français.
+          form-columns (forms.css) : sans carte, comme les autres formulaires ; ici chaque champ prend toute la ligne. */}
+      <form className="form-columns" onSubmit={handleSubmit} noValidate>
+        <div className="field-wide">
+          <label htmlFor="email">Adresse e-mail</label>
           <input
             type="email"
             id="email"
@@ -113,8 +114,8 @@ export default function LoginPage() {
           />
           {errors.email && <p>{errors.email}</p>}
         </div>
-        <div>
-          <label htmlFor="password">Mot de passe :</label>
+        <div className="field-wide">
+          <label htmlFor="password">Mot de passe</label>
           <input
             type="password"
             id="password"
@@ -125,18 +126,20 @@ export default function LoginPage() {
           {errors.password && <p>{errors.password}</p>}
         </div>
         {/* Bouton verrouillé pendant l'envoi : spinner, puis coche avant la redirection. */}
-        <button type="submit" disabled={status === 'sending' || status === 'sent'}>
-          {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
-          {status === 'sent' ? (
-            <>
-              <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
-                <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
-              </svg>
-              Connecté
-            </>
-          ) : status === 'sending' ? 'Connexion en cours…' : 'Se connecter'}
-        </button>
-        {sendError && <p role="alert">{sendError}</p>}
+        <div className="form-actions">
+          <button type="submit" disabled={status === 'sending' || status === 'sent'}>
+            {status === 'sending' && <span className="spinner" aria-hidden="true"></span>}
+            {status === 'sent' ? (
+              <>
+                <svg className="checkmark" viewBox="0 0 52 52" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" strokeWidth="5" d="M14 27 l8 8 l16 -16" />
+                </svg>
+                Connecté
+              </>
+            ) : status === 'sending' ? 'Connexion en cours…' : 'Se connecter'}
+          </button>
+          {sendError && <p role="alert">{sendError}</p>}
+        </div>
         {/* aria-live : le lecteur d'écran annonce le succès sans que la coche suffise. */}
         <div aria-live="polite">
           {status === 'sent' && <p className="visually-hidden">Connexion réussie.</p>}
