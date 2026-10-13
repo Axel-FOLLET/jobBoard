@@ -10,7 +10,7 @@ bp = Blueprint("admin", __name__)
 TABLES = {
     "companies": ["id", "name", "description", "location", "website", "siren"],
     "categories": ["id", "name"],
-    "people": ["id", "first_name", "last_name", "email", "phone", "role"],
+    "people": ["id", "first_name", "last_name", "email", "phone", "role", "company_id"],
     "ads": [
         "id",
         "title",
@@ -40,7 +40,7 @@ TABLES = {
 EDITABLE_FIELDS = {
     "companies": ["name", "description", "location", "website", "siren"],
     "categories": ["name"],
-    "people": ["first_name", "last_name", "email", "phone", "role"],
+    "people": ["first_name", "last_name", "email", "phone", "role", "company_id"],
     "ads": [
         "title",
         "short_description",
