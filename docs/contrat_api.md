@@ -771,7 +771,7 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 
 | Route                     | Succès                                             | Erreurs                                                                              |
 | ------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST /api/auth/register` | 201 : compte créé ; 202 : vérification de l’email en attente | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
+| `POST /api/auth/register` | 201 : compte créé et création de la session ; 202 : vérification de l’email en attente (pas de session) | 400 : champ invalide ou mot de passe trop court ; 409 : email déjà associé à un compte actif |
 | `POST /api/auth/login`    | 200 : le compte connecté et création de la session | 400 champ invalide ; 401 `Invalid credentials` ; 429 `Too many attempts` (en-tête `Retry-After`) |
 | `POST /api/auth/verify`   | 200 : la fiche, compte activé (pas de session ouverte) | 400 `Invalid field: token` ou `Invalid value` ; 409 `Email already used`             |
 
@@ -788,6 +788,8 @@ La connexion crée une **session Flask** permettant d'identifier l'utilisateur c
 | `phone`      | non         |                                                  |
 
 Le champ `role` n'est pas lu : un compte créé par l'inscription a toujours le rôle `user`.
+
+Une inscription réussie (201) crée la session, comme une connexion : la personne n'a pas à se reconnecter. Une inscription en attente (202) n'en crée aucune.
 
 ### `POST /api/auth/login`
 
@@ -1060,6 +1062,7 @@ Mêmes champs que [`POST /api/ads`](#post-apiads), **sans** `company_id` ni `con
 - Espace recruteur : colonne `people.company_id`, routes `GET /api/categories`, `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, erreur 403 `Recruiter only`.
 - `PATCH /api/auth/me` : `email` n'est plus modifiable (400 `Unknown field: email`) ; un `phone` vide est enregistré `null`.
 - Inscription en attente : le lien de vérification n'est écrit dans le journal du serveur que si l'envoi d'e-mails est désactivé.
+- `POST /api/auth/register` : une réponse 201 crée aussi la session ; rien ne change pour 202.
 
 ---
 

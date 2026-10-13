@@ -99,6 +99,11 @@ def register():
 
     conn.close()
 
+    # Compte neuf, mot de passe choisi à l'instant : la session s'ouvre comme à la connexion.
+    # Le cas 202 n'y passe jamais, tant que le lien n'a pas été ouvert.
+    session.clear()
+    session["user_id"] = person_id
+
     return jsonify(dict(row)), 201
 
 
