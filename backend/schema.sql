@@ -33,7 +33,9 @@ CREATE TABLE people (
   email TEXT NOT NULL UNIQUE,
   phone TEXT,
   password_hash TEXT,
-  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  -- entreprise du recruteur ; NULL par défaut : la personne n'est pas recruteur
+  company_id INTEGER REFERENCES companies(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE ads (
