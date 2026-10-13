@@ -1,6 +1,6 @@
 // Page « Créer un compte » : formulaire d'inscription pour un visiteur.
-import { useContext, useState } from 'react'
-import { Link, Navigate } from 'react-router'
+import { useContext, useEffect, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router'
 import { AuthContext } from '../AuthContext'
 import { apiFetch } from '../api.js'
 import { FIELD_NAMES } from '../fieldNames.js'
@@ -18,7 +18,15 @@ export default function AccountPage() {
     const [status, setStatus] = useState('idle')
     const [sendError, setSendError] = useState('')
     const [needLogin, setNeedLogin] = useState(false)
-    const { user } = useContext(AuthContext)
+    const { user, setUser } = useContext(AuthContext)
+    const navigate = useNavigate()
+
+    // Même délai que la connexion (LoginPage.jsx) pour laisser le V se dessiner avant de changer de page.
+    useEffect(() => {
+        if (status !== 'sent') return
+        const timer = setTimeout(() => navigate('/'), 1150)
+        return () => clearTimeout(timer)
+    }, [status, navigate])
 
     const handleSubmit = async (event) => {
         // Empêche le rechargement de la page lors de la soumission du formulaire.
@@ -88,13 +96,14 @@ export default function AccountPage() {
         setStatus('sending')
 
         try {
-            const { status: httpStatus, error: apiError } = await apiFetch('/api/auth/register', {
+            const { status: httpStatus, data, error: apiError } = await apiFetch('/api/auth/register', {
                 method: 'POST',
                 body,
             })
 
-            // 201 : le compte est créé mais pas connecté, la personne passe par /login.
+            // 201 : le compte est créé et la session ouverte par l'API ; l'effet plus haut change de page.
             if (httpStatus === 201) {
+                setUser(data)
                 setStatus('sent')
                 return
             }
@@ -136,7 +145,8 @@ export default function AccountPage() {
     }
 
     // Déjà connecté : la modification de la fiche vit dans l'espace candidat, pas ici.
-    if (user) {
+    // Sauf juste après l'inscription : la coche reste affichée jusqu'au changement de page.
+    if (user && status !== 'sent') {
         return <Navigate to="/espace-candidat/informations" replace />
     }
 
@@ -205,7 +215,7 @@ export default function AccountPage() {
             </div>
             <div aria-live="polite">
                 {status === 'sent' && (
-                    <p>Votre compte est créé. Vous pouvez vous connecter. <Link to="/login">Se connecter</Link></p>
+                    <p>Votre compte est créé et votre session est ouverte.</p>
                 )}
                 {status === 'pending' && (
                     <p>
