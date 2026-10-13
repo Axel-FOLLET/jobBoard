@@ -21,8 +21,8 @@ export const tables = {
     title: "Personnes",
     addLabel: "Ajouter une personne",
     editTitle: (row) => `Modifier ${row.first_name} ${row.last_name}`,
-    editableFields: ["first_name", "last_name", "email", "phone", "role"],
-    columns: [{ key: "id", label: "Identifiant" }, { key: "first_name", label: "Prénom" }, { key: "last_name", label: "Nom" }, { key: "email", label: "Adresse e-mail" }, { key: "phone", label: "Téléphone" }, { key: "role", label: "Rôle" }],
+    editableFields: ["first_name", "last_name", "email", "phone", "role", "company_id"],
+    columns: [{ key: "id", label: "Identifiant" }, { key: "first_name", label: "Prénom" }, { key: "last_name", label: "Nom" }, { key: "email", label: "Adresse e-mail" }, { key: "phone", label: "Téléphone" }, { key: "role", label: "Rôle" }, { key: "company_id", label: "Identifiant de l'entreprise" }],
   },
   ads: {
     title: "Annonces",

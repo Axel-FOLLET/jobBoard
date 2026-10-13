@@ -42,10 +42,10 @@ export default function Layout() {
             if (event.key === 'Escape') setMenuOpen(false)
           }}>
           <NavLink to="/offres">Offres d'emploi</NavLink>
-          <NavLink to="/recruteur">Espace recruteur</NavLink>
           {/* Navigation selon l'état : visiteur, personne connectée, administration. */}
           {user ? ( 
             <>
+              <NavLink to="/recruteur">Espace recruteur</NavLink>
               <NavLink to="/espace-candidat">Espace candidat</NavLink>
               {user.role === 'admin' && <NavLink to="/admin">Administration</NavLink>}
               <button type="button" onClick={handleLogout}>Se déconnecter</button>

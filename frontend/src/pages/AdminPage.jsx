@@ -349,19 +349,22 @@ export default function AdminPage() {
   return (
     <div className="page admin-page">
       <h1>Administration</h1>
-      <div className="admin-tabs">
-        {/* Un bouton par table ; changer de table remet la pagination et ferme le formulaire. */}
-        {Object.keys(tables).map((table) => (
-          <button key={table} type="button" aria-pressed={selectedTable === table} disabled={editSaving} onClick={() => {
-            setSelectedTable(table);
-            setCurrentPage(1);
-            setEditingRow(null);
-            setEditError(null);
-            setIsCreating(false);
-          }}>
-            {tables[table].title}
-          </button>
-        ))}
+      {/* tab-bar (tabs.css) : le choix des tables reste collé sous l'en-tête pendant le défilement. */}
+      <div className="tab-bar">
+        <div className="admin-tabs">
+          {/* Un bouton par table ; changer de table remet la pagination et ferme le formulaire. */}
+          {Object.keys(tables).map((table) => (
+            <button key={table} type="button" aria-pressed={selectedTable === table} disabled={editSaving} onClick={() => {
+              setSelectedTable(table);
+              setCurrentPage(1);
+              setEditingRow(null);
+              setEditError(null);
+              setIsCreating(false);
+            }}>
+              {tables[table].title}
+            </button>
+          ))}
+        </div>
       </div>
       <h2>{tables[selectedTable].title}</h2>
 

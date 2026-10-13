@@ -1,4 +1,4 @@
-/**
+/*
  * Appelle l'API et renvoie toujours la même forme de résultat, sans jamais lever
  * d'exception :
  *   ok     : true si le code HTTP est un succès
