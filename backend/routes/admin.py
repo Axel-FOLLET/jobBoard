@@ -33,6 +33,8 @@ TABLES = {
         "message",
         "status",
         "created_at",
+        "receipt_email_sent_at",
+        "decision_email_sent_at",
     ],
 }
 

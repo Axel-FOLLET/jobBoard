@@ -64,9 +64,12 @@ CREATE TABLE applications (
   message TEXT NOT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  receipt_email_sent_at TEXT,
+  decision_email_sent_at TEXT,
   UNIQUE (ad_id, person_id),
   FOREIGN KEY (ad_id) REFERENCES ads(id) ON DELETE RESTRICT,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE RESTRICT);
+  
 
 -- Inscription en attente : une personne déjà dans people sans mot de passe crée son compte.
 -- Rien n’est appliqué à sa fiche avant le clic sur le lien envoyé à son adresse.

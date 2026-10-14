@@ -52,7 +52,8 @@ def notify_application_received(conn, application_id):
         (application_id,),
     ).fetchone()
     if row is None:
-        return False
+        sent = False
+        return sent
     body = (
         f"Bonjour {row['first_name']},\n\n"
         f"Nous avons bien reçu votre candidature pour l'annonce « {row['title']} ».\n\n"
@@ -60,14 +61,23 @@ def notify_application_received(conn, application_id):
         "L'équipe de recrutement vous remercie pour votre intérêt !\n\n"
         "Cordialement,\nL'équipe Y.I.A Jobs"
     )
-    return send_email(row["email"], f"Candidature reçue : {row['title']}", body)
+    sent = send_email(row["email"], f"Candidature reçue : {row['title']}", body)
 
+    # Envoi réussi : on note quand l'accusé de réception est parti
+    if sent:
+        conn.execute(
+            "UPDATE applications SET receipt_email_sent_at = datetime('now') WHERE id = ?",
+            (application_id,),
+        )
+        conn.commit()
+
+    return sent
 
 def notify_closure(conn, ad_id):
     """Après la clôture d'une annonce : un email au candidat retenu, un email à chaque candidat refusé.
     Renvoie le nombre d'emails envoyés."""
     rows = conn.execute(
-        """SELECT people.email, people.first_name, applications.status, ads.title, companies.name AS company
+        """SELECT people.email, people.first_name, applications.status, ads.title, companies.name AS company, applications.id 
            FROM applications
            JOIN people ON people.id = applications.person_id
            JOIN ads ON ads.id = applications.ad_id
@@ -92,7 +102,17 @@ def notify_closure(conn, ad_id):
         else:
             continue
         body = f"Bonjour {row['first_name']},\n\n{text}\n\nCordialement,\nL'équipe Y.I.A Jobs"
-        sent += send_email(row["email"], subject, body)
+
+        # Envoi réussi : on compte l'email et on note quand la réponse est partie
+        if send_email(row["email"], subject, body):
+            sent += 1
+            conn.execute(
+                "UPDATE applications SET decision_email_sent_at = datetime('now') WHERE id = ?",
+                (row["id"],),
+            )
+
+    # Un seul commit pour toutes les dates de la boucle
+    conn.commit()
     return sent
 
 
