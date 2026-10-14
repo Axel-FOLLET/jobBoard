@@ -353,9 +353,13 @@ def my_applications():
 @admin_required
 def close_ad(ad_id):
     data = request.get_json(silent=True) or {}
-
     conn = get_db()
+    return close_ad_in_db(conn, ad_id, data)
 
+
+# Clôture partagée par l'admin (close_ad ci-dessus) et le recruteur (routes/recruiter.py).
+# Les vérifications de droits sont faites avant l'appel. Ferme conn dans tous les cas.
+def close_ad_in_db(conn, ad_id, data):
     # Vérifier que l'annonce existe
     ad = conn.execute(
         "SELECT id, status FROM ads WHERE id = ?",

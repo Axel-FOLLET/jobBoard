@@ -2,7 +2,7 @@ from functools import wraps
 from flask import Blueprint, jsonify, request
 from auth_utils import current_user
 from db import get_db
-from routes.ads import fetch_ad
+from routes.ads import fetch_ad, close_ad_in_db
 
 recruiter = Blueprint("recruiter", __name__)
 
@@ -77,6 +77,23 @@ def list_categories():
     rows = conn.execute("SELECT id, name FROM categories ORDER BY name").fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+#------------------- POST /api/recruiter/ads/<id>/closure -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>/closure", methods=["POST"])
+@recruiter_required
+def close_company_ad(ad_id, company_id):
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+
+    # annonce d'une autre entreprise ou inexistante : même 404, rien n'est modifié
+    if fetch_own_ad(conn, ad_id, company_id) is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # mêmes règles que la clôture admin : la fonction est partagée
+    return close_ad_in_db(conn, ad_id, data)
 
 
 #------------------- GET /api/recruiter/company -------------------
