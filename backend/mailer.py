@@ -145,3 +145,31 @@ def send_verification_link(to, first_name, token):
         print(f"[vérification] lien pour {to} : {link}")
 
     return sent
+
+
+def send_email_change_link(to, first_name, token):
+    """Lien de confirmation d'un changement d'adresse, envoyé à la NOUVELLE adresse.
+
+    Mêmes règles que send_verification_link : le lien n'est écrit dans le journal du
+    serveur que si l'envoi est désactivé, et il ne sort jamais dans la réponse HTTP.
+    """
+    base_url = os.environ.get("APP_BASE_URL", "http://localhost:5173")
+    link = f"{base_url}/confirmation-email?token={token}"
+
+    body = (
+        f"Bonjour {first_name},\n\n"
+        "Une demande de changement d'adresse e-mail a été faite pour votre compte Y.I.A Jobs.\n"
+        "Pour confirmer cette nouvelle adresse, ouvrez ce lien :\n\n"
+        f"{link}\n\n"
+        "Ce lien est valable 24 heures et ne fonctionne qu'une fois. "
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
+        "votre adresse actuelle reste inchangée.\n\n"
+        "Cordialement,\nL'équipe Y.I.A Jobs"
+    )
+
+    sent = send_email(to, "Confirmez votre nouvelle adresse — Y.I.A Jobs", body)
+
+    if not sent and os.environ.get("MAIL_ENABLED") != "1":
+        print(f"[changement d'adresse] lien pour {to} : {link}")
+
+    return sent

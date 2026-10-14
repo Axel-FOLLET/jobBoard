@@ -52,6 +52,17 @@ button:disabled:has(.spinner, .checkmark) {
   background-color: var(--color-surface-blue);
 }
 
+/* Action qui supprime ou efface (admin, filtres de recherche) : différenciée par son texte et sa couleur. */
+.button-danger {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-line);
+}
+
+.button-danger:hover:not(:disabled) {
+  background-color: var(--color-danger-hover);
+}
+
 /* Lien d'appel à l'action présenté comme un bouton, sans soulignement. */
 a.button-link {
   display: inline-flex;

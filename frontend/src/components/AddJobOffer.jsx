@@ -8,11 +8,11 @@ function formatDate(value) {
   return new Date(value.replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-export default function JobOffer({ id, company, title, shortDescription, location, contractType }) {
+export default function JobOffer({ id, company, title, shortDescription, location, contractType, isNew }) {
   // Détail et formulaire fermés au départ.
   const [showDetails, setShowDetails] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  
+
   // details à null = le détail n'a pas encore été demandé à l'API.
   const [details, setDetails] = useState(null)
   const [error, setError] = useState(null)
@@ -46,6 +46,8 @@ export default function JobOffer({ id, company, title, shortDescription, locatio
     <div className="job-offer">
       {/* Le poste est le titre de la carte ; l'entreprise, au-dessus, en petite ligne.
           Le titre est un bouton : il ouvre et referme le détail, ce qui évite un deuxième bouton par carte. */}
+      {/* Badge en haut à droite de la carte, hors du flux : il ne décale aucun texte (isNew calculé par JobBoardPage). */}
+      {isNew && <span className="badge-new">Nouveau</span>}
       <p className="offer-company">{company}</p>
       <h2>
         <button type="button" className="offer-title" aria-expanded={showDetails} onClick={handleClick}>{title}</button>

@@ -7,12 +7,26 @@ import { apiFetch } from '../api.js'
 // Filtres de l'adresse transmis tels quels à l'API (docs/contrat_api.md, filtres de GET /api/ads).
 const API_FILTERS = ['q', 'contract_type', 'location']
 
+// Une annonce publiée depuis moins de NEW_DAYS jours affiche le badge « Nouveau » et passe le filtre des nouveautés.
+const NEW_DAYS = 7
+
+// created_at de l'API ("2026-10-08 18:15:02", UTC) -> vrai si l'annonce a moins de NEW_DAYS jours.
+function isNewOffer(createdAt, now) {
+  // Écart en millisecondes, converti en jours (1000 ms × 60 s × 60 min × 24 h).
+  const ageInDays = (now - new Date(createdAt.replace(' ', 'T') + 'Z')) / (1000 * 60 * 60 * 24)
+  return ageInDays < NEW_DAYS
+}
+
 // liste les annonces publiées, récupérées depuis /api/ads.
 export default function JobBoardPage() {
   // Liste vide au départ, puis remplie par l'appel réseau ci-dessous.
   const [offers, setOffers] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Case « Nouvelles annonces uniquement » : le tri se fait ici, sur la liste déjà reçue.
+  const [onlyNew, setOnlyNew] = useState(false)
+  // Heure lue une seule fois, au premier affichage : un affichage de React doit toujours donner le même résultat.
+  const [now] = useState(() => Date.now())
   // ?q=…&contract_type=…&location=… viennent de la barre de recherche (accueil ou cette page).
   const [searchParams] = useSearchParams()
   const search = searchParams.get('q') ?? ''
@@ -23,6 +37,7 @@ export default function JobBoardPage() {
   }
   // Texte simple (« q=dev&location=Paris ») : l'effet ne repart que s'il change.
   const apiQuery = apiParams.toString()
+  const shownOffers = onlyNew ? offers.filter((offer) => isNewOffer(offer.created_at, now)) : offers
 
   // À chaque changement de recherche ou de filtre : on redemande la liste à l'API.
   useEffect(() => {
@@ -56,22 +71,27 @@ export default function JobBoardPage() {
       {/* key : la barre est recréée quand l'adresse change, ses champs reprennent donc la recherche affichée. */}
       <SearchBar key={apiQuery} />
 
+      <label className="new-filter">
+        <input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} />
+        Nouvelles annonces uniquement
+      </label>
+
       {/* Trois affichages possibles, dans cet ordre : chargement, erreur, puis la liste. La barre reste visible. */}
       {loading && <p>Chargement…</p>}
       {!loading && error && <p>{error}</p>}
       {!loading && !error && (
         <>
           {/* Recherche ou filtres en cours : on rappelle le texte cherché et le nombre de résultats. */}
-          {apiQuery !== '' && offers.length > 0 && (
+          {(apiQuery !== '' || onlyNew) && shownOffers.length > 0 && (
             <p className="results-count">
-              {offers.length} offre{offers.length > 1 ? 's' : ''}
+              {shownOffers.length} offre{shownOffers.length > 1 ? 's' : ''}
               {search !== '' ? ` pour « ${search} »` : ' pour ces filtres'}
             </p>
           )}
-          {offers.length === 0 && <p>Aucune offre ne correspond à cette recherche.</p>}
+          {shownOffers.length === 0 && <p>Aucune offre ne correspond à cette recherche.</p>}
           {/* Une carte par annonce ; key sert à React seul, d'où id en plus. */}
           <div className="offers-grid">
-            {offers.map((offer) => (
+            {shownOffers.map((offer) => (
               <JobOffer
                 key={offer.id}
                 id={offer.id}
@@ -80,6 +100,7 @@ export default function JobBoardPage() {
                 shortDescription={offer.short_description}
                 location={offer.location}
                 contractType={offer.contract_type}
+                isNew={isNewOffer(offer.created_at, now)}
               />
             ))}
           </div>

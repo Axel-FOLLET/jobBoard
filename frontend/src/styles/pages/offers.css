@@ -1,9 +1,9 @@
 /* Offres (JobBoardPage.jsx) : grille et carte d'une offre (components/AddJobOffer.jsx). */
 
-/* Grille responsive des offres : les cartes d'une même rangée ont la même hauteur. */
+/* Grille des offres : deux cartes par ligne, de même hauteur sur une rangée (une seule sur téléphone, plus bas). */
 .offers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   gap: 24px;
   padding-bottom: 48px;
@@ -20,6 +20,8 @@
   margin-bottom: 0;
   border: 1px solid var(--color-line);
   transition: border-color .2s;
+  /* Repère du badge « Nouveau », placé en absolu dans le coin. */
+  position: relative;
 }
 
 .job-offer:hover {
@@ -32,9 +34,11 @@
   color: var(--color-text-secondary);
 }
 
-/* Entreprise en petites capitales espacées, au-dessus du poste. */
+/* Entreprise en petites capitales espacées, au-dessus du poste.
+   La marge droite, réservée sur toutes les cartes, empêche un nom long de passer sous le badge. */
 .job-offer .offer-company {
   margin: 0 0 8px;
+  padding-right: 88px;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -48,6 +52,21 @@
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.02em;
+}
+
+/* Badge « Nouveau » en haut à droite, au-dessus de l'entreprise : hors du flux, il ne décale aucun texte.
+   Annonce publiée depuis moins de NEW_DAYS jours (JobBoardPage.jsx). */
+.job-offer .badge-new {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-pill);
 }
 
 /* Le titre est un bouton qui ouvre le détail : il garde l'aspect du titre, et se souligne au survol comme un lien.
@@ -122,10 +141,28 @@
   font-size: 14px;
 }
 
+/* Case « Nouvelles annonces uniquement », sous la barre de recherche. */
+.new-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: -24px 0 24px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* La case garde sa taille : forms.css met tous les champs en pleine largeur. */
+.new-filter input {
+  width: auto;
+  margin: 0;
+}
+
 /* Grille et cartes compactes sur téléphone. */
 @media (max-width: 600px) {
-  /* Réduire les espacements entre cartes. */
+  /* Une carte par ligne, espacements réduits. */
   .offers-grid {
+    grid-template-columns: 1fr;
     gap: 20px;
   }
 
