@@ -22,6 +22,12 @@ AD_FIELDS = [
 ]
 AD_REQUIRED = ["title", "short_description", "category_id"]
 
+# l'annonce, seulement si elle appartient à l'entreprise du recruteur ; sinon None
+def fetch_own_ad(conn, ad_id, company_id):
+    return conn.execute(
+        "SELECT id, status FROM ads WHERE id = ? AND company_id = ?",
+        (ad_id, company_id),
+    ).fetchone()
 
 # Vérifier que la personne connectée est recruteur.
 # Le company_id vient toujours de la fiche de la personne connectée, jamais du client :
@@ -207,3 +213,26 @@ def create_company_ad(company_id):
     row = fetch_ad(conn, cur.lastrowid)
     conn.close()
     return jsonify(dict(row)), 201
+
+@recruiter.route("/recruiter/ads/<int:ad_id>/applications", methods=["GET"])
+@recruiter_required
+def list_ad_applications(ad_id, company_id):
+    conn = get_db()
+
+    if fetch_own_ad(conn, ad_id, company_id) is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # les candidatures de l'annonce, avec le candidat, de la plus ancienne à la plus récente
+    rows = conn.execute(
+        """SELECT applications.id, people.first_name, people.last_name, people.email,
+                  people.phone, applications.message, applications.status, applications.created_at
+           FROM applications
+           JOIN people ON people.id = applications.person_id
+           WHERE applications.ad_id = ?
+           ORDER BY applications.created_at, applications.id""",
+        (ad_id,),
+    ).fetchall()
+
+    conn.close()
+    return jsonify([dict(r) for r in rows])
