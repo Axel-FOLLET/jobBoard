@@ -32,7 +32,8 @@ export default function RecruiterPage() {
       <h1>Espace recruteur</h1>
       {loadError && <p>Impossible de charger vos postes pour le moment.</p>}
 
-      {/* Deux colonnes côte à côte, chacune avec ses cartes de postes empilées. */}
+      {/* Deux colonnes côte à côte, chacune avec ses cartes de postes empilées ; les titres partagent
+          la même ligne de grille (recruiter.css) : les cartes commencent à la même hauteur. */}
       <div className="recruiter-overview">
         <section>
           <h2>Postes les plus sollicités</h2>
@@ -42,7 +43,11 @@ export default function RecruiterPage() {
             <ul className="overview-list">
               {plusRepondus.map((poste) => (
                 <li key={poste.id} className="overview-card">
-                  {poste.title} — {poste.applications_count} candidature{poste.applications_count > 1 ? 's' : ''}
+                  {/* Toute la carte mène aux candidatures du poste (retenir ou refuser). */}
+                  <Link to={`/recruteur/postes/${poste.id}/candidatures`}>
+                    <strong title={poste.title}>{poste.title}</strong>
+                    <span>{poste.applications_count} candidature{poste.applications_count > 1 ? 's' : ''}</span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -57,7 +62,10 @@ export default function RecruiterPage() {
             <ul className="overview-list">
               {sansReponse.map((poste) => (
                 <li key={poste.id} className="overview-card">
-                  {poste.title} — en attente depuis le {poste.oldest_unanswered_at.slice(0, 10)}
+                  <Link to={`/recruteur/postes/${poste.id}/candidatures`}>
+                    <strong title={poste.title}>{poste.title}</strong>
+                    <span>En attente depuis le {poste.oldest_unanswered_at.slice(0, 10)}</span>
+                  </Link>
                 </li>
               ))}
             </ul>

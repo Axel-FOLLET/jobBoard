@@ -37,7 +37,12 @@ export default function JobBoardPage() {
   }
   // Texte simple (« q=dev&location=Paris ») : l'effet ne repart que s'il change.
   const apiQuery = apiParams.toString()
-  const shownOffers = onlyNew ? offers.filter((offer) => isNewOffer(offer.created_at, now)) : offers
+  // « Salaire minimum » du menu de la barre (?min_salary=…), trié ici comme la case des nouveautés ;
+  // 0 : tous les salaires. Une annonce sans salaire (salary à null) est masquée dès qu'un minimum est choisi.
+  const minSalary = Number(searchParams.get('min_salary')) || 0
+  const shownOffers = offers
+    .filter((offer) => !onlyNew || isNewOffer(offer.created_at, now))
+    .filter((offer) => minSalary === 0 || (offer.salary !== null && offer.salary >= minSalary))
 
   // À chaque changement de recherche ou de filtre : on redemande la liste à l'API.
   useEffect(() => {
@@ -68,8 +73,8 @@ export default function JobBoardPage() {
       {/* Titre de page ordinaire, plus petit que celui de l'accueil : les résultats remontent. */}
       <h1>Offres d&apos;emploi</h1>
 
-      {/* key : la barre est recréée quand l'adresse change, ses champs reprennent donc la recherche affichée. */}
-      <SearchBar key={apiQuery} />
+      {/* key : la barre est recréée quand l'adresse change (min_salary compris), ses champs reprennent donc la recherche affichée. */}
+      <SearchBar key={searchParams.toString()} />
 
       <label className="new-filter">
         <input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} />
@@ -82,7 +87,7 @@ export default function JobBoardPage() {
       {!loading && !error && (
         <>
           {/* Recherche ou filtres en cours : on rappelle le texte cherché et le nombre de résultats. */}
-          {(apiQuery !== '' || onlyNew) && shownOffers.length > 0 && (
+          {(apiQuery !== '' || onlyNew || minSalary !== 0) && shownOffers.length > 0 && (
             <p className="results-count">
               {shownOffers.length} offre{shownOffers.length > 1 ? 's' : ''}
               {search !== '' ? ` pour « ${search} »` : ' pour ces filtres'}

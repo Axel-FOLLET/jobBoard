@@ -10,6 +10,10 @@ const FILTERS = [
   { name: 'location', label: 'Lieu' },
 ]
 
+// Choix de « Salaire minimum » (salaire annuel brut, en euros). Ce filtre va dans l'adresse (min_salary)
+// mais pas à l'API : JobBoardPage.jsx trie la liste déjà reçue.
+const SALARY_STEPS = [20000, 30000, 40000, 50000]
+
 // La zone de saisie suit la hauteur du texte : height à auto, puis la hauteur réelle du contenu.
 function resize(textarea) {
   textarea.style.height = 'auto'
@@ -24,6 +28,7 @@ export default function SearchBar() {
   const [filters, setFilters] = useState({
     contract_type: searchParams.get('contract_type') ?? '',
     location: searchParams.get('location') ?? '',
+    min_salary: searchParams.get('min_salary') ?? '',
   })
   const [filtersOpen, setFiltersOpen] = useState(false)
   // Choix des listes : les valeurs présentes dans les annonces ouvertes.
@@ -57,6 +62,7 @@ export default function SearchBar() {
     for (const { name } of FILTERS) {
       if (filters[name] !== '') params.set(name, filters[name])
     }
+    if (filters.min_salary !== '') params.set('min_salary', filters.min_salary)
     const queryString = params.toString()
     setFiltersOpen(false)
     navigate(queryString === '' ? '/offres' : `/offres?${queryString}`)
@@ -80,7 +86,7 @@ export default function SearchBar() {
     return value === '' || options[name].includes(value) ? options[name] : [value, ...options[name]]
   }
 
-  const activeCount = FILTERS.filter(({ name }) => filters[name] !== '').length
+  const activeCount = FILTERS.filter(({ name }) => filters[name] !== '').length + (filters.min_salary !== '' ? 1 : 0)
 
   return (
     // noValidate : un champ vide ouvre simplement la liste complète, sans message du navigateur.
@@ -137,7 +143,16 @@ export default function SearchBar() {
               </select>
             </label>
           ))}
-          <button type="button" className="button-danger" onClick={() => setFilters({ contract_type: '', location: '' })}>
+          <label>
+            Salaire minimum
+            <select name="min_salary" value={filters.min_salary} onChange={(event) => setFilters({ ...filters, min_salary: event.target.value })}>
+              <option value="">Tous</option>
+              {SALARY_STEPS.map((step) => (
+                <option key={step} value={step}>{step.toLocaleString('fr-FR')} €</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="button-danger" onClick={() => setFilters({ contract_type: '', location: '', min_salary: '' })}>
             Effacer les filtres
           </button>
         </div>

@@ -18,6 +18,8 @@ export default function AdminPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [perPage, setPerPage] = useState(10);
+  // Sens du tri fait par l'API (paramètre order) : "asc" = plus anciens d'abord, "desc" = plus récents d'abord.
+  const [order, setOrder] = useState("asc");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   // refresh : incrémenté à la main pour forcer un rechargement après une suppression ou un ajout.
@@ -41,7 +43,7 @@ export default function AdminPage() {
         setLoading(true);
         setError(null);
         const { ok, status, data, total } = await apiFetch(
-          `/api/admin/${selectedTable}?page=${currentPage}&per_page=${perPage}`
+          `/api/admin/${selectedTable}?page=${currentPage}&per_page=${perPage}&order=${order}`
         );
         if (!ok) {
           throw new Error(`Erreur HTTP ! statut : ${status}`);
@@ -58,7 +60,7 @@ export default function AdminPage() {
       }
     };
     fetchData();
-  }, [selectedTable, user, currentPage, perPage, refresh]);
+  }, [selectedTable, user, currentPage, perPage, order, refresh]);
 
   // Panneau ouvert : la touche Échap le ferme, sauf pendant un envoi.
   const formOpen = isCreating || editingRow !== null;
@@ -381,6 +383,13 @@ export default function AdminPage() {
           <option value={50}>50 par page</option>
         </select>
       </label>
+      {/* Flèche du tri : tout le tableau est retrié par l'API, on repart donc de la page 1. */}
+      <button type="button" className="button-secondary" onClick={() => {
+        setOrder(order === "asc" ? "desc" : "asc");
+        setCurrentPage(1);
+      }}>
+        {order === "asc" ? "Plus anciens d'abord ↑" : "Plus récents d'abord ↓"}
+      </button>
       </div>
       <div className="admin-add">
         <button

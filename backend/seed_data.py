@@ -1,12 +1,42 @@
 import json
+import random
 import re
 import sqlite3
 import sys
+import unicodedata
 
 from db import get_db
 
 DATA_FILE = "data/annonces.json"
 TABLES = ("companies", "categories", "people", "ads", "applications")
+
+# Candidats de démonstration (étape 4 quater) : noms tirés au hasard, sans compte (pas de mot de passe)
+CANDIDATES_COUNT = 100
+FIRST_NAMES = (
+    "Léa", "Hugo", "Chloé", "Lucas", "Emma", "Nathan", "Inès", "Théo", "Manon", "Louis",
+    "Camille", "Gabriel", "Sarah", "Arthur", "Jade", "Raphaël", "Zoé", "Adam", "Clara", "Jules",
+    "Lina", "Mathis", "Alice", "Tom", "Louise", "Noah", "Anaïs", "Yanis", "Julie", "Maxime",
+    "Rose", "Enzo", "Lucie", "Ethan", "Margaux", "Sacha", "Elsa", "Paul", "Nina", "Victor",
+)
+LAST_NAMES = (
+    "Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau",
+    "Simon", "Laurent", "Lefèvre", "Michel", "Garcia", "David", "Bertrand", "Roux", "Vincent", "Fournier",
+    "Morel", "Girard", "André", "Mercier", "Dupont", "Lambert", "Bonnet", "François", "Martinez", "Legrand",
+    "Garnier", "Faure", "Rousseau", "Blanc", "Guérin", "Muller", "Henry", "Roussel", "Nicolas", "Perrin",
+)
+MESSAGES = (
+    "Bonjour, votre annonce correspond à mon parcours et je serais ravi(e) d'en discuter avec vous.",
+    "Bonjour, je vous adresse ma candidature : ce poste correspond à ce que je recherche.",
+    "Bonjour, je suis disponible rapidement et très motivé(e) par votre entreprise.",
+    "Bonjour, mon expérience récente me semble proche de vos besoins. Au plaisir d'échanger.",
+    "Bonjour, je souhaite rejoindre votre équipe et me tiens à votre disposition pour un entretien.",
+)
+
+
+def email_part(text):
+    """« Léa » -> « lea » : sans accent ni espace, pour l'adresse e-mail."""
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z]", "", ascii_text.lower())
 
 # Lire le fichier de données (4 listes : companies, categories, contacts, ads)
 with open(DATA_FILE, encoding="utf-8") as f:
@@ -186,6 +216,73 @@ try:
             "UPDATE people SET company_id = ? WHERE id = ?",
             (company_id, contact_id),
         )
+
+    # Tirage fixe : la même base à chaque lancement
+    rng = random.Random(14)
+
+    # --------------------------------------------------
+    # 4 ter. Vieillir les annonces : seules les 2 dernières gardent la date du moment
+    #        (badge « Nouveau » à moins de 7 jours) ; les autres datent de 8 à 57 jours
+    # --------------------------------------------------
+    ad_ids = [row["id"] for row in conn.execute("SELECT id FROM ads ORDER BY id")]
+
+    for ad_id in ad_ids[:-2]:
+        conn.execute(
+            "UPDATE ads SET created_at = datetime('now', ?) WHERE id = ?",
+            (f"-{rng.randint(8, 57)} days", ad_id),
+        )
+
+    # --------------------------------------------------
+    # 4 quater. 100 candidats sans compte, et 10 à 40 candidatures par annonce ouverte
+    #           (statut pending ou rejected : accepted n'arrive que par la clôture)
+    # --------------------------------------------------
+    candidate_ids = []
+    names = rng.sample([(first, last) for first in FIRST_NAMES for last in LAST_NAMES], CANDIDATES_COUNT)
+    # email est UNIQUE : adresses déjà prises (seed.sql, recruteurs), pour ajouter un numéro si besoin
+    used_emails = {row["email"] for row in conn.execute("SELECT email FROM people")}
+
+    for first_name, last_name in names:
+        base = f"{email_part(first_name)}.{email_part(last_name)}"
+        email = f"{base}@example.com"
+        number = 2
+        while email in used_emails:
+            email = f"{base}{number}@example.com"
+            number += 1
+        used_emails.add(email)
+
+        cur = conn.execute(
+            """INSERT INTO people (first_name, last_name, email, phone)
+               VALUES (?, ?, ?, ?)""",
+            (
+                first_name,
+                last_name,
+                email,
+                f"06{rng.randint(0, 99999999):08d}" if rng.random() < 0.7 else None,
+            ),
+        )
+        candidate_ids.append(cur.lastrowid)
+
+    # age_minutes : âge de l'annonce, pour dater chaque candidature après sa publication
+    open_ads = conn.execute(
+        """SELECT id, created_at,
+                  CAST((julianday('now') - julianday(created_at)) * 1440 AS INTEGER) AS age_minutes
+           FROM ads WHERE status = 'open'"""
+    ).fetchall()
+
+    for ad in open_ads:
+        for person_id in rng.sample(candidate_ids, rng.randint(10, 40)):
+            conn.execute(
+                """INSERT INTO applications (ad_id, person_id, message, status, created_at)
+                   VALUES (?, ?, ?, ?, datetime(?, ?))""",
+                (
+                    ad["id"],
+                    person_id,
+                    rng.choice(MESSAGES),
+                    "rejected" if rng.random() < 0.2 else "pending",
+                    ad["created_at"],
+                    f"+{rng.randint(0, max(ad['age_minutes'], 0))} minutes",
+                ),
+            )
 
 except sqlite3.Error as error:
     # erreur de la base (ex. SIREN déjà pris) : on annule tout, rien n'est enregistré

@@ -1,17 +1,27 @@
 /* Espace recruteur, vue d'ensemble (RecruiterPage.jsx) : deux colonnes de cartes de postes. */
 
-/* Deux colonnes de même largeur, alignées en haut. */
+/* Deux colonnes de même largeur, alignées en haut. Deux lignes : les titres, puis les cartes. */
 .recruiter-overview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto;
   align-items: start;
-  gap: 32px;
+  column-gap: 32px;
+}
+
+/* Chaque colonne reprend les deux lignes de la grille (subgrid) : un titre sur deux lignes
+   agrandit la ligne des titres des deux côtés, et les cartes restent alignées. */
+.recruiter-overview > section {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
 }
 
 /* Titres des colonnes sans grande marge haute, pour démarrer à la même hauteur. */
 .recruiter-overview h2 {
   margin-top: 0;
   font-size: 20px;
+  align-self: end;
 }
 
 /* Cartes empilées, sans puces. */
@@ -28,8 +38,36 @@
 .overview-card {
   background: var(--color-surface);
   border-radius: var(--radius-card);
-  padding: 20px 24px;
   border: 1px solid var(--color-line);
+}
+
+/* Toute la carte est un lien vers les candidatures du poste : même forme à gauche et à droite,
+   le titre du poste puis une ligne grise. */
+.overview-card a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 24px;
+  border-radius: inherit;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* Titre du poste sur une seule ligne, coupé par des points de suspension ; le titre entier au survol. */
+.overview-card strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overview-card span {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* Survol : bordure bleue, la carte se clique. */
+.overview-card:hover {
+  border-color: var(--color-blue);
 }
 
 /* Une seule colonne sur téléphone et petite tablette. */
@@ -80,4 +118,71 @@
 
 .postes-table-closed td a {
   color: var(--color-text-secondary);
+}
+
+/* Tableau « Candidatures reçues » (RecruiterApplicationsPage.jsx), dans le cadre .table-scroll (admin.css) :
+   mêmes cellules que le tableau d'administration. */
+.candidatures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.candidatures-table th, .candidatures-table td {
+  padding: 16px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+
+.candidatures-table th {
+  background: var(--color-surface-blue);
+  font-weight: 600;
+}
+
+/* Repère discret lors du survol d'une ligne. */
+.candidatures-table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+/* Message coupé sur une ligne, avec des points de suspension. */
+.candidatures-table td.cell-clip {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* « Retenir ce candidat » et « Refuser » côte à côte (le flex est sur un bloc intérieur : une cellule reste une cellule). */
+.candidatures-table .row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.candidatures-table .col-actions button {
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
+/* Colonne « Retenir ce candidat » collée au bord droit du cadre, comme Modifier et Supprimer en administration :
+   elle reste visible quand le tableau défile. Fond opaque, trait fin à gauche pour la détacher. */
+.candidatures-table .col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--color-surface);
+  box-shadow: inset 1px 0 0 var(--color-line);
+}
+
+.candidatures-table th.col-actions {
+  background: var(--color-surface-blue);
+}
+
+.candidatures-table tbody tr:hover .col-actions {
+  background: var(--color-bg);
+}
+
+/* Bouton rouge « Clôturer l'annonce », détaché du tableau. */
+.table-scroll + .button-danger {
+  margin-top: 24px;
 }

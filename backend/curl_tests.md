@@ -933,21 +933,15 @@ Réponse :
 }
 ```
 
-# Test 19 : Fermer une annonce avec des candidatures sans préciser laquelle accepter (attendu : 400 BAD REQUEST)
+# Test 19 : Fermer une annonce avec des candidatures sans préciser laquelle accepter (attendu : 200 OK)
+
+Règle changée le 14/10 : `accepted_application_id` est facultatif. Sans lui, toutes les candidatures de l'annonce passent à `rejected` et l'annonce à `closed` (l'ancien 400 `Missing field: accepted_application_id` n'existe plus). Ce test ferme l'annonce 2 : le rejouer **après** le test 20, qui utilise la même annonce.
 
 ```bash
 curl -i -b cookies.txt -X POST http://127.0.0.1:5000/api/ads/2/closure -H "Content-Type: application/json" -d '{}'
 ```
 
-Code obtenu : 400
-
-Réponse :
-
-```json
-{
-  "error": "Missing field: accepted_application_id"
-}
-```
+Code obtenu : non rejoué avec curl depuis le changement (vérifié le 14/10 par un appel direct à `close_ad_in_db` sur une copie de la base : 200, annonce `closed`, candidatures `rejected`).
 
 # Test 20 : Tester une mauvaise candidature lors de la clôture (attendu : 400 BAD REQUEST)
 
@@ -2270,3 +2264,77 @@ noemie.valcen@example.com      Solvenyre
 jules.dorlier@example.com      Brumelix
 camille.lesterval@example.com  Caldrivane
 ```
+
+## Test J9
+
+# Test 1 : POST /api/recruiter/ads/<id>/applications/<application_id>/rejection, refus d'une seule candidature
+
+Base neuve (`init_db.py` puis `seed_data.py`), `MAIL_ENABLED=0`. Rec1 (TechNova, entreprise 1), Rec2 (GreenWorks, entreprise 2) et Bob (compte ordinaire) : mêmes comptes et mêmes cookies que les tests J7. Annonce 1 : TechNova, ouverte, candidatures 1 et 2 de `seed.sql` (`pending`). Annonce 2 : GreenWorks, fermée, candidatures 3 et 4.
+
+```bash
+# refus de la candidature 1 -> attendu : 200, la candidature avec "status": "rejected" ; l'annonce 1 reste ouverte
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/1/rejection"
+
+# même refus une 2e fois -> attendu : 409 Application already processed
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/1/rejection"
+
+# candidature d'une autre annonce, ou inexistante -> attendu : 404 Application not found (pour les 2)
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/3/rejection"
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/999/rejection"
+
+# annonce d'une autre entreprise -> attendu : 404 Ad not found
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/2/applications/3/rejection"
+
+# annonce fermée -> attendu : 409 Ad already closed
+curl -i -X POST -b cookies_rec2.txt "http://127.0.0.1:5000/api/recruiter/ads/2/applications/3/rejection"
+
+# sans session -> attendu : 401 Login required ; compte ordinaire -> attendu : 403 Recruiter only
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads/1/applications/2/rejection"
+curl -i -X POST -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/2/rejection"
+
+# vérification en base -> attendu : annonce 1 open, candidature 1 rejected, candidature 2 toujours pending
+sqlite3 jobboard.db "SELECT id, status FROM ads WHERE id = 1; SELECT id, status FROM applications WHERE id IN (1, 2);"
+```
+
+Code obtenu : non rejoué avec curl. Vérifié le 14/10 par le client de test Flask sur une base neuve dans `/tmp` (comptes créés par `register`, `company_id` posé en base, e-mails simulés) : 200 (`"status": "rejected"`, mêmes clés que la liste des candidatures), 409 `Application already processed`, 404 `Application not found` (pour les 2), 404 `Ad not found`, 409 `Ad already closed`, 401 `Login required`, 403 `Recruiter only`. En base : annonce 1 `open`, candidature 1 `rejected`, candidature 2 `pending`.
+
+# Test 2 : la clôture n'écrit pas une 2e fois au candidat déjà refusé
+
+Après le test 1, avec un envoi d'e-mails qui réussit : la candidature 1 a son `decision_email_sent_at` rempli.
+
+```bash
+# clôture sans candidat retenu -> attendu : 200 "status": "closed", un e-mail pour chaque candidature sauf la 1
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/closure" -H "Content-Type: application/json" -d '{}'
+```
+
+Code obtenu : non rejoué avec curl. Vérifié le 14/10 par le client de test Flask (envoi simulé, qui réussit) : le refus de la candidature 1 envoie 1 e-mail « n'a pas donné suite » ; la clôture de l'annonce 1 (40 candidatures) renvoie 200 `closed` et envoie 39 e-mails, aucun à la candidature 1.
+
+# Test 3 : GET /api/admin/<table>?order=asc|desc, tri des tableaux admin
+
+Base neuve (`init_db.py` puis `seed_data.py`), administrateur connecté avec `cookies_admin.txt` (même compte que les tests J5), Bob connecté avec `cookies_bob.txt`.
+
+```bash
+# plus récentes d'abord -> attendu : 200, created_at décroissant, X-Total-Count inchangé
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/applications?order=desc&page=1&per_page=5"
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?order=desc&page=1&per_page=5"
+
+# plus anciennes d'abord -> attendu : 200, created_at croissant
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/applications?order=asc&page=1&per_page=5"
+
+# table sans created_at -> attendu : 200, id décroissant
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/people?order=desc&page=1&per_page=5"
+
+# sans order -> attendu : 200, id croissant comme avant (ids 1 à 5)
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?page=1&per_page=5"
+
+# valeur inconnue, en majuscules ou vide -> attendu : 400 Invalid order (pour les 3)
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?order=up"
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?order=DESC"
+curl -i -b cookies_admin.txt "http://127.0.0.1:5000/api/admin/ads?order="
+
+# sans session -> attendu : 401 Login required ; compte ordinaire -> attendu : 403 Admin only
+curl -i "http://127.0.0.1:5000/api/admin/ads?order=desc"
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/admin/ads?order=desc"
+```
+
+Code obtenu : non rejoué avec curl. Vérifié le 14/10 par le client de test Flask sur une base neuve dans `/tmp` (admin créé par `register` puis `role` posé en base) : 15 contrôles sur 15. `applications?order=desc` : ids 1360 à 1356 ; `asc` : ids 1, 2, 3, 4, 513 (created_at croissant, pas l'id) ; `ads?order=desc` : 53, 52, 39, 45, 41 ; `people?order=desc` : 115 à 111 ; sans `order` : 1 à 5 ; la page 2 en `desc` suit la page 1 ; 400 `Invalid order` pour `up`, `DESC`, vide et `id;DROP` ; 401 `Login required` ; 403 `Admin only`.

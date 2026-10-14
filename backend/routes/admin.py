@@ -112,16 +112,30 @@ def list_records(table):
     if pagination == "invalid":
         return jsonify({"error": "Invalid pagination"}), 400
 
+    # Sens du tri facultatif : asc ou desc ; absent, l'ordre reste celui d'avant (id croissant).
+    # Seuls les mots ASC ou DESC entrent dans le SQL, jamais le texte reçu.
+    order = request.args.get("order")
+    if order not in (None, "asc", "desc"):
+        return jsonify({"error": "Invalid order"}), 400
+
     conn = get_db()
 
     columns = TABLES[table]
+
+    # Tables datées (annonces, candidatures) : par date, puis par id pour départager ; les autres par id.
+    if order is None:
+        order_by = "id"
+    elif "created_at" in columns:
+        order_by = f"created_at {order.upper()}, id {order.upper()}"
+    else:
+        order_by = f"id {order.upper()}"
 
     total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
     sql = f"""
         SELECT {", ".join(columns)}
         FROM {table}
-        ORDER BY id
+        ORDER BY {order_by}
     """
     params = []
 

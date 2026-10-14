@@ -73,16 +73,25 @@ def notify_application_received(conn, application_id):
 
     return sent
 
+def rejection_text(title, company):
+    """Texte du « non retenu », le même à la clôture et au refus d'une seule candidature."""
+    return (
+        f"Nous vous remercions pour votre candidature à l'annonce « {title} ».\n"
+        f"L'équipe de {company} n'a pas donné suite à votre candidature. N'hésitez pas à consulter nos autres offres d'emploi sur le site carrière Y.I.A Jobs."
+    )
+
+
 def notify_closure(conn, ad_id):
     """Après la clôture d'une annonce : un email au candidat retenu, un email à chaque candidat refusé.
+    Les candidats déjà prévenus (refus d'une seule candidature, decision_email_sent_at rempli) ne reçoivent rien.
     Renvoie le nombre d'emails envoyés."""
     rows = conn.execute(
-        """SELECT people.email, people.first_name, applications.status, ads.title, companies.name AS company, applications.id 
+        """SELECT people.email, people.first_name, applications.status, ads.title, companies.name AS company, applications.id
            FROM applications
            JOIN people ON people.id = applications.person_id
            JOIN ads ON ads.id = applications.ad_id
            JOIN companies ON companies.id = ads.company_id
-           WHERE applications.ad_id = ?""",
+           WHERE applications.ad_id = ? AND applications.decision_email_sent_at IS NULL""",
         (ad_id,),
     ).fetchall()
     sent = 0
@@ -95,10 +104,7 @@ def notify_closure(conn, ad_id):
             )
         elif row["status"] == "rejected":
             subject = f"Information concernant votre candidature : {row['title']}"
-            text = (
-                f"Nous vous remercions pour votre candidature à l'annonce « {row['title']} ».\n"
-                f"L'équipe de {row['company']} a retenu un autre profil. N'hésitez pas à consulter nos autres offres d'emploi sur le site carrière Y.I.A Jobs."
-            )
+            text = rejection_text(row["title"], row["company"])
         else:
             continue
         body = f"Bonjour {row['first_name']},\n\n{text}\n\nCordialement,\nL'équipe Y.I.A Jobs"
@@ -113,6 +119,34 @@ def notify_closure(conn, ad_id):
 
     # Un seul commit pour toutes les dates de la boucle
     conn.commit()
+    return sent
+
+
+def notify_rejection(conn, application_id):
+    """Refus d'une seule candidature, annonce encore ouverte : un email « non retenu » à ce candidat."""
+    row = conn.execute(
+        """SELECT people.email, people.first_name, ads.title, companies.name AS company
+           FROM applications
+           JOIN people ON people.id = applications.person_id
+           JOIN ads ON ads.id = applications.ad_id
+           JOIN companies ON companies.id = ads.company_id
+           WHERE applications.id = ?""",
+        (application_id,),
+    ).fetchone()
+    if row is None:
+        return False
+
+    body = f"Bonjour {row['first_name']},\n\n{rejection_text(row['title'], row['company'])}\n\nCordialement,\nL'équipe Y.I.A Jobs"
+    sent = send_email(row["email"], f"Information concernant votre candidature : {row['title']}", body)
+
+    # Envoi réussi : on note quand la réponse est partie (la clôture ne lui écrira plus)
+    if sent:
+        conn.execute(
+            "UPDATE applications SET decision_email_sent_at = datetime('now') WHERE id = ?",
+            (application_id,),
+        )
+        conn.commit()
+
     return sent
 
 

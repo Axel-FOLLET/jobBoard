@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from auth_utils import current_user
 from db import get_db
 from routes.ads import fetch_ad, close_ad_in_db
+from mailer import notify_rejection
 
 recruiter = Blueprint("recruiter", __name__)
 
@@ -21,6 +22,12 @@ AD_FIELDS = [
     "contract_type",
 ]
 AD_REQUIRED = ["title", "short_description", "category_id"]
+
+# Une candidature avec son candidat, au format du contrat (liste et refus)
+APPLICATION_SELECT = """SELECT applications.id, people.first_name, people.last_name, people.email,
+                  people.phone, applications.message, applications.status, applications.created_at
+           FROM applications
+           JOIN people ON people.id = applications.person_id"""
 
 # l'annonce, seulement si elle appartient à l'entreprise du recruteur ; sinon None
 def fetch_own_ad(conn, ad_id, company_id):
@@ -242,10 +249,7 @@ def list_ad_applications(ad_id, company_id):
 
     # les candidatures de l'annonce, avec le candidat, de la plus ancienne à la plus récente
     rows = conn.execute(
-        """SELECT applications.id, people.first_name, people.last_name, people.email,
-                  people.phone, applications.message, applications.status, applications.created_at
-           FROM applications
-           JOIN people ON people.id = applications.person_id
+        f"""{APPLICATION_SELECT}
            WHERE applications.ad_id = ?
            ORDER BY applications.created_at, applications.id""",
         (ad_id,),
@@ -253,3 +257,52 @@ def list_ad_applications(ad_id, company_id):
 
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+#------------------- POST /api/recruiter/ads/<id>/applications/<application_id>/rejection -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>/applications/<int:application_id>/rejection", methods=["POST"])
+@recruiter_required
+def reject_application(ad_id, application_id, company_id):
+    conn = get_db()
+
+    # annonce d'une autre entreprise ou inexistante : même 404, rien n'est modifié
+    ad = fetch_own_ad(conn, ad_id, company_id)
+    if ad is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad already closed"}), 409
+
+    # la candidature doit appartenir à cette annonce
+    application = conn.execute(
+        "SELECT status FROM applications WHERE id = ? AND ad_id = ?",
+        (application_id, ad_id),
+    ).fetchone()
+    if application is None:
+        conn.close()
+        return jsonify({"error": "Application not found"}), 404
+
+    # seule une candidature en attente se refuse
+    if application["status"] != "pending":
+        conn.close()
+        return jsonify({"error": "Application already processed"}), 409
+
+    # l'annonce reste ouverte, les autres candidatures ne changent pas
+    conn.execute(
+        "UPDATE applications SET status = 'rejected' WHERE id = ?",
+        (application_id,),
+    )
+    conn.commit()
+
+    # e-mail après la validation : un échec d'envoi ne change pas la réponse
+    notify_rejection(conn, application_id)
+
+    row = conn.execute(
+        f"{APPLICATION_SELECT} WHERE applications.id = ?",
+        (application_id,),
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row))

@@ -70,7 +70,7 @@ Règles :
 - Avec la pagination, seules les lignes de la page demandée sont renvoyées (`OFFSET = (page - 1) * per_page`). La réponse **reste un tableau**.
 - Une page au-delà de la dernière renvoie **200** et `[]`.
 - La pagination se combine avec les filtres de `GET /api/ads`.
-- L'ordre est celui de la route : `created_at` puis `id` décroissants pour `GET /api/ads`, `id` croissant pour `GET /api/admin/<table>`.
+- L'ordre est celui de la route : `created_at` puis `id` décroissants pour `GET /api/ads`, `id` croissant pour `GET /api/admin/<table>`, sauf si son paramètre `order` dit le contraire (voir [Liste](#liste)).
 
 ## En-tête `X-Total-Count`
 
@@ -256,13 +256,14 @@ Pour `GET /api/ads` et `GET /api/companies/<id>/ads` :
     "company": "TechNova",
     "location": "Londres",
     "contract_type": "CDI",
+    "salary": 100000,
     "status": "open",
     "created_at": "2026-10-07 10:04:10"
   }
 ]
 ```
 
-Clés : `id`, `title`, `short_description`, `company`, `location`, `contract_type`, `status`, `created_at`.
+Clés : `id`, `title`, `short_description`, `company`, `location`, `contract_type`, `salary`, `status`, `created_at`. `salary` est un entier (salaire annuel brut) ou `null` s'il n'est pas indiqué ; il sert au filtre « Salaire minimum » de la page des offres (ajouté au J8).
 
 ---
 
@@ -363,7 +364,7 @@ status = closed
 
 ## Avec des candidatures
 
-Si l'annonce possède des candidatures, le champ suivant est obligatoire :
+Si l'annonce possède des candidatures, le champ suivant est **facultatif** :
 
 ```json
 {
@@ -371,7 +372,9 @@ Si l'annonce possède des candidatures, le champ suivant est obligatoire :
 }
 ```
 
-La candidature sélectionnée passe à :
+**Sans candidat retenu** (`{}`, ou `accepted_application_id` à `null`) : toutes les candidatures de l'annonce passent à `rejected`, puis l'annonce passe à `closed`.
+
+**Avec un candidat retenu**, la candidature sélectionnée passe à :
 
 ```text
 accepted
@@ -399,7 +402,6 @@ Après la validation, chaque candidat reçoit un e-mail : retenu ou non retenu (
 | ---- | ---------------------------------------- | ---------------------------------------------------------- |
 | 401  | `Login required`                         | utilisateur non connecté                                   |
 | 403  | `Admin only`                             | utilisateur connecté mais non administrateur               |
-| 400  | `Missing field: accepted_application_id` | des candidatures existent mais aucune n'est sélectionnée   |
 | 400  | `Application does not belong to this ad` | la candidature sélectionnée appartient à une autre annonce |
 | 404  | `Ad not found`                           | annonce inexistante                                        |
 | 409  | `Ad already closed`                      | annonce déjà fermée                                        |
@@ -463,6 +465,18 @@ Toute autre table retourne :
 Retourne tous les enregistrements de la table, triés par `id` croissant.
 
 Accepte la [pagination](#pagination) (`page`, `per_page`, en-tête `X-Total-Count`, 400 `Invalid pagination`).
+
+Paramètre facultatif `order` (ajouté au J9), pour la flèche de tri de la page admin :
+
+| Valeur | Tri |
+| ------ | --- |
+| absent | `id` croissant, comme avant |
+| `asc` | plus anciens d'abord |
+| `desc` | plus récents d'abord |
+
+- Avec `order`, `ads` et `applications` sont triées par `created_at`, puis par `id` en cas d'égalité ; les autres tables par `id`.
+- Le tri porte sur toute la table, avant la pagination : `GET /api/admin/applications?order=desc&page=1&per_page=10` renvoie les 10 candidatures les plus récentes.
+- Toute autre valeur renvoie **400** `Invalid order`.
 
 ### Détail
 
@@ -716,6 +730,7 @@ Les champs `status` et `created_at` ne sont pas modifiables par le CRUD. Les cha
 | 400  | `Missing field: <nom>`       | champ obligatoire absent ou vide                        |
 | 400  | `Unknown field: <nom>`       | champ non autorisé                                      |
 | 400  | `Invalid pagination`         | `page` / `per_page` invalide sur la liste               |
+| 400  | `Invalid order`              | `order` différent de `asc` ou `desc` sur la liste       |
 | 400  | `No fields to update`        | `PATCH` sans champ à modifier                           |
 | 400  | `Unknown reference`          | clé étrangère inconnue                                  |
 | 400  | `Invalid value`              | valeur refusée par une contrainte `CHECK`               |
@@ -1061,6 +1076,7 @@ L'entreprise utilisée est **toujours** celle de la fiche de la personne connect
 | `DELETE /api/recruiter/ads/<id>` (J8) | 204 | 401, 403, 404, 409 (voir ci-dessous) |
 | `GET /api/recruiter/ads/<id>/applications` (J8) | 200 : les candidatures de l'annonce (`[]` possible) | 401, 403, 404 |
 | `POST /api/recruiter/ads/<id>/closure` (J8) | 200 : l'annonce fermée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 404, 400, 409 (voir ci-dessous) |
+| `POST /api/recruiter/ads/<id>/applications/<application_id>/rejection` (J9) | 200 : la candidature refusée | 401, 403, 404, 409 (voir ci-dessous) |
 
 **Annonce d'une autre entreprise.** Sur les routes `/api/recruiter/ads/<id>…`, une annonce inexistante **et** une annonce d'une autre entreprise reçoivent la même réponse : 404 `Ad not found`. Un recruteur ne peut ni lire, ni modifier, ni clôturer, ni supprimer l'annonce d'une autre entreprise, et la réponse ne lui apprend même pas qu'elle existe.
 
@@ -1172,14 +1188,43 @@ Clés : `id`, `first_name`, `last_name`, `email`, `phone`, `message`, `status`, 
 
 ### `POST /api/recruiter/ads/<id>/closure`
 
-Mêmes corps, mêmes règles et même transaction que la [clôture par l'administrateur](#clôture-dune-annonce) : sans candidature, `{}` suffit ; avec des candidatures, `accepted_application_id` est obligatoire, cette candidature passe à `accepted` et toutes les autres à `rejected`. Les e-mails partent après la validation.
+Mêmes corps, mêmes règles et même transaction que la [clôture par l'administrateur](#clôture-dune-annonce) : `accepted_application_id` est facultatif. Sans lui (`{}`), toutes les candidatures passent à `rejected` ; avec lui, cette candidature passe à `accepted` et toutes les autres à `rejected`. Les e-mails partent après la validation.
 
 | Code | Message | Cas |
 | --- | --- | --- |
-| 400 | `Missing field: accepted_application_id` | des candidatures existent mais aucune n'est sélectionnée |
 | 400 | `Application does not belong to this ad` | la candidature sélectionnée appartient à une autre annonce |
 | 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
 | 409 | `Ad already closed` | annonce déjà fermée |
+
+### `POST /api/recruiter/ads/<id>/applications/<application_id>/rejection`
+
+Ajouté au J9. Refuse **une seule** candidature, sans clôturer l'annonce : le recruteur répond au candidat sans attendre la fin du recrutement. Pas de corps.
+
+- La candidature passe de `pending` à `rejected` ; l'annonce reste `open`, les autres candidatures ne changent pas.
+- Après le `commit()`, le candidat reçoit l'e-mail « non retenu » (même texte qu'à la clôture), et `decision_email_sent_at` est rempli si l'envoi réussit.
+- À la clôture suivante, cette candidature ne reçoit pas un second e-mail : `notify_closure` saute les candidatures dont `decision_email_sent_at` est déjà rempli.
+
+```json
+{
+  "id": 5,
+  "first_name": "Alice",
+  "last_name": "Test",
+  "email": "alice.test@example.com",
+  "phone": null,
+  "message": "Bonjour, je suis intéressée.",
+  "status": "rejected",
+  "created_at": "2026-10-09 14:12:00"
+}
+```
+
+Réponse 200 : la candidature, avec les mêmes clés que [`GET /api/recruiter/ads/<id>/applications`](#get-apirecruiteradsidapplications).
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
+| 404 | `Application not found` | candidature inexistante ou d'une autre annonce |
+| 409 | `Ad already closed` | annonce déjà fermée |
+| 409 | `Application already processed` | la candidature n'est plus `pending` |
 
 ---
 
@@ -1191,6 +1236,7 @@ Ajouté au J8. Les fonctions de `backend/mailer.py` sont appelées par les route
 | --- | --- | --- | --- |
 | Candidature créée (`POST /api/ads/<id>/applications`) | le candidat | `notify_application_received` | `receipt_email_sent_at` |
 | Annonce clôturée (`POST /api/ads/<id>/closure` ou `POST /api/recruiter/ads/<id>/closure`) | chaque candidat : retenu ou non retenu | `notify_closure` | `decision_email_sent_at` |
+| Candidature refusée seule (`POST /api/recruiter/ads/<id>/applications/<application_id>/rejection`, J9) | ce candidat | `notify_rejection` (même texte que le « non retenu » de `notify_closure`) | `decision_email_sent_at` |
 
 ```sql
 receipt_email_sent_at TEXT,   -- date d'envoi de l'accusé de réception ; NULL : pas envoyé
@@ -1206,6 +1252,13 @@ decision_email_sent_at TEXT   -- date d'envoi de la réponse (retenu ou non) ; N
   ALTER TABLE applications ADD COLUMN receipt_email_sent_at TEXT;
   ALTER TABLE applications ADD COLUMN decision_email_sent_at TEXT;
   ```
+
+---
+
+# Changements J9
+
+- Espace recruteur : `POST /api/recruiter/ads/<id>/applications/<application_id>/rejection` refuse une candidature sans clôturer l'annonce (404 `Application not found`, 409 `Application already processed`) ; `notify_closure` n'écrit plus aux candidats déjà prévenus.
+- Administration : paramètre facultatif `order` (`asc` ou `desc`) sur `GET /api/admin/<table>`, par `created_at` pour `ads` et `applications`, sinon par `id` ; 400 `Invalid order`.
 
 ---
 

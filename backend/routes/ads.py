@@ -64,7 +64,7 @@ def list_ads():
     sql = (
         """SELECT ads.id, ads.title, ads.short_description,
                   companies.name AS company, ads.location, ads.contract_type,
-                  ads.status, ads.created_at
+                  ads.salary, ads.status, ads.created_at
            FROM ads
            JOIN companies ON companies.id = ads.company_id
            JOIN categories ON categories.id = ads.category_id
@@ -127,7 +127,7 @@ def list_company_ads(company_id):
     rows = conn.execute(
         """SELECT ads.id, ads.title, ads.short_description,
                   companies.name AS company, ads.location, ads.contract_type,
-                  ads.status, ads.created_at
+                  ads.salary, ads.status, ads.created_at
            FROM ads
            JOIN companies ON companies.id = ads.company_id
            WHERE ads.company_id = ? AND ads.status = 'open'
@@ -381,14 +381,18 @@ def close_ad_in_db(conn, ad_id, data):
         (ad_id,)
     ).fetchone()
 
-    # S'il y a des candidatures, accepted_application_id est obligatoire
-    if application is not None and "accepted_application_id" not in data:
-        conn.close()
-        return jsonify({"error": "Missing field: accepted_application_id"}), 400
+    # accepted_application_id est facultatif : absent ou null, aucun candidat n'est retenu
+    accepted_application_id = data.get("accepted_application_id")
 
-    # Si l'annonce n'a aucune candidature, on peut simplement la fermer
-    if application is not None:
-        accepted_application_id = data["accepted_application_id"]
+    # Des candidatures, mais aucun candidat retenu : toutes sont refusées
+    if application is not None and accepted_application_id is None:
+        conn.execute(
+            "UPDATE applications SET status = 'rejected' WHERE ad_id = ?",
+            (ad_id,)
+        )
+
+    # Des candidatures et un candidat retenu (sans candidature, on ferme simplement l'annonce)
+    elif application is not None:
 
         # Vérifier que la candidature appartient bien à cette annonce
         accepted_application = conn.execute(
