@@ -17,6 +17,7 @@ import RecruiterPage from './pages/RecruiterPage.jsx'
 import RecruiterOffersPage from './pages/RecruiterOffersPage.jsx'
 import RecruiterCompanyPage from './pages/RecruiterCompanyPage.jsx'
 import RecruiterNewOfferPage from './pages/RecruiterNewOfferPage.jsx'
+import RecruiterApplicationsPage from './pages/RecruiterApplicationsPage.jsx'
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/recruteur" element={<RecruiterLayout />}>
           <Route index element={<RecruiterPage />} />
           <Route path="entreprise" element={<RecruiterCompanyPage />} />
+          <Route path="postes/:id/candidatures" element={<RecruiterApplicationsPage />} />
           <Route path="postes" element={<RecruiterOffersPage />} />
           <Route path="nouvelle-offre" element={<RecruiterNewOfferPage />} />
         </Route>

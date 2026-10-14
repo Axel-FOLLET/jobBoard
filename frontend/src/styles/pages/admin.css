@@ -248,15 +248,3 @@
     padding-right: 20px;
   }
 }
-
-/* Action de suppression différenciée par son texte et sa couleur. */
-.admin-page .button-danger {
-  color: var(--color-danger);
-  background: var(--color-danger-bg);
-  border-color: var(--color-danger-line);
-}
-
-/* Survol du bouton de suppression. */
-.admin-page .button-danger:hover {
-  background: var(--color-danger-hover);
-}

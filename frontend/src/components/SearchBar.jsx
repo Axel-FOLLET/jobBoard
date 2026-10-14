@@ -137,7 +137,7 @@ export default function SearchBar() {
               </select>
             </label>
           ))}
-          <button type="button" className="button-secondary" onClick={() => setFilters({ contract_type: '', location: '' })}>
+          <button type="button" className="button-danger" onClick={() => setFilters({ contract_type: '', location: '' })}>
             Effacer les filtres
           </button>
         </div>
