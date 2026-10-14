@@ -2,6 +2,8 @@ import sqlite3
 from flask import Blueprint, jsonify, request
 from db import get_db
 from auth_utils import current_user, admin_required, login_required
+from mailer import notify_application_received, notify_closure
+
 
 bp = Blueprint("ads", __name__)
 
@@ -306,6 +308,8 @@ def create_application(ad_id):
         conn.close()
         return jsonify({"error": "Already applied"}), 409
 
+    notify_application_received(conn, cur.lastrowid)
+    
     # --------------------------------------------------
     # Renvoyer la candidature créée
     # --------------------------------------------------
@@ -416,6 +420,7 @@ def close_ad(ad_id):
 
     # Une seule validation de la transaction
     conn.commit()
+    notify_closure(conn, ad_id)
 
     # Récupérer l'annonce dans le même format que GET /api/ads/<id>
     row = fetch_ad(conn, ad_id)
