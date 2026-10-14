@@ -2,8 +2,9 @@ import sqlite3
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash
 
+import pending_email_changes
 import pending_registrations
-from mailer import send_verification_link
+from mailer import send_email_change_link, send_verification_link
 from auth_utils import (
     create_person,
     current_user,
@@ -255,4 +256,124 @@ def me():
 
     conn.close()
 
+    return jsonify(dict(row)), 200
+
+
+# ------------------- Changement d'adresse e-mail (contrat, section du même nom) -------------------
+# Deux temps, comme la vérification d'inscription : la demande met la nouvelle adresse de côté
+# et envoie un lien à cette adresse ; la confirmation, quand le lien est ouvert, applique le
+# changement. PATCH /api/auth/me refuse toujours le champ email.
+
+
+@auth.route("/email-change", methods=["POST"])
+@login_required
+def request_email_change():
+    data, error = get_json_object()
+
+    if error:
+        return error
+
+    for field in ("email", "password"):
+        error = validate_text_field(data, field, email=(field == "email"))
+
+        if error:
+            return error
+
+    new_email = data["email"].strip().lower()
+    user = current_user()
+    conn = get_db()
+
+    # current_user() ne renvoie pas password_hash : on relit la fiche.
+    row = conn.execute(
+        """
+        SELECT id, first_name, email, password_hash
+        FROM people
+        WHERE id = ?
+        """,
+        (user["id"],),
+    ).fetchone()
+
+    # Le mot de passe actuel prouve que la personne devant l'écran est bien la titulaire
+    # du compte : une session laissée ouverte ne suffit pas.
+    if (
+        row is None
+        or not row["password_hash"]
+        or not check_password_hash(row["password_hash"], data["password"])
+    ):
+        conn.close()
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    if new_email == row["email"].strip().lower():
+        conn.close()
+        return jsonify({"error": "Invalid value"}), 400
+
+    # Adresse déjà dans people, avec ou sans compte : même refus qu'à l'inscription.
+    existing = conn.execute(
+        "SELECT id FROM people WHERE email = ?",
+        (new_email,),
+    ).fetchone()
+
+    if existing is not None:
+        conn.close()
+        return jsonify({"error": "Email already used"}), 409
+
+    token = pending_email_changes.create(conn, row["id"], new_email)
+    conn.close()
+
+    # Le lien part à la NOUVELLE adresse : c'est elle qu'il faut prouver. Le jeton ne
+    # figure jamais dans la réponse.
+    send_email_change_link(new_email, row["first_name"], token)
+
+    return jsonify({"message": "Verification required"}), 202
+
+
+@auth.route("/email-change/confirm", methods=["POST"])
+def confirm_email_change():
+    # Pas de session exigée : le lien peut être ouvert sur un autre appareil, le jeton
+    # suffit à prouver que la nouvelle adresse est contrôlée.
+    data, error = get_json_object()
+
+    if error:
+        return error
+
+    error = validate_text_field(data, "token")
+
+    if error:
+        return error
+
+    conn = get_db()
+    pending = pending_email_changes.take(conn, data["token"].strip())
+
+    # Jeton inconnu, déjà utilisé ou expiré : même refus dans les trois cas, pour ne rien
+    # apprendre à quelqu'un qui essaierait des jetons au hasard.
+    if pending is None:
+        conn.close()
+        return jsonify({"error": "Invalid value"}), 400
+
+    # Entre la demande et le clic, une autre fiche a pu prendre cette adresse : la
+    # contrainte UNIQUE de people.email refuse alors la mise à jour.
+    try:
+        conn.execute(
+            "UPDATE people SET email = ? WHERE id = ?",
+            (pending["new_email"], pending["person_id"]),
+        )
+        conn.commit()
+
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "Email already used"}), 409
+
+    row = conn.execute(
+        """
+        SELECT id, first_name, last_name, email, phone, role
+        FROM people
+        WHERE id = ?
+        """,
+        (pending["person_id"],),
+    ).fetchone()
+
+    conn.close()
+
+    # La session en cours, s'il y en a une, reste ouverte ; le mot de passe ne change pas.
     return jsonify(dict(row)), 200

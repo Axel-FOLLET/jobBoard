@@ -1,4 +1,5 @@
 --suppression des tables si elles existent déjà dans la base de données. Sinon on passe à la suite.
+DROP TABLE IF EXISTS pending_email_changes;
 DROP TABLE IF EXISTS pending_registrations;
 DROP TABLE IF EXISTS applications;
 DROP TABLE IF EXISTS ads;
@@ -80,6 +81,21 @@ CREATE TABLE pending_registrations (
   last_name TEXT NOT NULL,
   phone TEXT,
   password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+);
+
+-- Changement d’adresse e-mail en attente : la personne a demandé une nouvelle adresse
+-- (avec son mot de passe), mais n’a pas encore ouvert le lien envoyé à cette nouvelle adresse.
+-- La fiche people n’est modifiée qu’à la confirmation. Mêmes règles que pending_registrations :
+-- empreinte SHA-256 du jeton seulement, lien valable 24 heures, une seule demande par personne.
+-- Même définition que pending_email_changes.py, qui crée la table sur une base déjà en place.
+CREATE TABLE pending_email_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL UNIQUE,
+  new_email TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL,
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
