@@ -368,3 +368,25 @@ def update_company_ad(ad_id, company_id):
     row = fetch_ad(conn, ad_id)
     conn.close()
     return jsonify(dict(row)), 200
+
+#------------------- DELETE /api/recruiter/ads/<id> -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>", methods=["DELETE"])
+@recruiter_required
+def delete_company_ad(ad_id, company_id):
+    conn = get_db()
+
+    if fetch_own_ad(conn, ad_id, company_id) is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    if conn.execute(
+        "SELECT 1 FROM applications WHERE ad_id = ? LIMIT 1", (ad_id,)
+    ).fetchone() is not None:
+        conn.close()
+        return jsonify({"error": "Ad has applications"}), 409
+    
+    conn.execute("DELETE FROM ads WHERE id = ?", (ad_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
