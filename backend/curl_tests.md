@@ -2338,3 +2338,509 @@ curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/admin/ads?order=desc"
 ```
 
 Code obtenu : non rejoué avec curl. Vérifié le 14/10 par le client de test Flask sur une base neuve dans `/tmp` (admin créé par `register` puis `role` posé en base) : 15 contrôles sur 15. `applications?order=desc` : ids 1360 à 1356 ; `asc` : ids 1, 2, 3, 4, 513 (created_at croissant, pas l'id) ; `ads?order=desc` : 53, 52, 39, 45, 41 ; `people?order=desc` : 115 à 111 ; sans `order` : 1 à 5 ; la page 2 en `desc` suit la page 1 ; 400 `Invalid order` pour `up`, `DESC`, vide et `id;DROP` ; 401 `Login required` ; 403 `Admin only`.
+
+## Test J8 et J9
+
+Tests rejoués avec curl le 15/10, dans l'ordre ci-dessous, sur une base neuve. Les tests se suivent : l'annonce 1 est fermée au test 3, puis sert au 409 des tests 4 et 7 ; l'annonce `$AD` est supprimée à la fin du test 7.
+
+# Mise en place : base neuve, deux recruteurs, un compte ordinaire, deux annonces sans candidature
+
+```bash
+# base neuve, puis serveur avec les e-mails désactivés (les lignes [mail désactivé] s'affichent dans ce terminal)
+python3 init_db.py
+python3 seed_data.py
+MAIL_ENABLED=0 python3 app.py
+
+# dans un 2e terminal : inscription (attendu : 201, la session s'ouvre)
+curl -s -c cookies_rec1.txt -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Rec","last_name":"Un","email":"rec1.test@example.com","password":"password123"}'
+curl -s -c cookies_rec2.txt -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Rec","last_name":"Deux","email":"rec2.test@example.com","password":"password123"}'
+curl -s -c cookies_bob.txt -X POST "http://127.0.0.1:5000/api/auth/register" -H "Content-Type: application/json" -d '{"first_name":"Bob","last_name":"Test","email":"bob.test@example.com","password":"password123"}'
+
+# Rec1 -> TechNova (1), Rec2 -> GreenWorks (2), Bob reste un compte ordinaire
+sqlite3 jobboard.db "UPDATE people SET company_id = 1 WHERE email = 'rec1.test@example.com'; UPDATE people SET company_id = 2 WHERE email = 'rec2.test@example.com';"
+sqlite3 jobboard.db "SELECT id, email, company_id FROM people WHERE email LIKE '%.test@example.com';"
+
+# deux annonces de Rec1 sans candidature : $AD (modification, suppression) et $AD2 (e-mails)
+AD=$(curl -s -b cookies_rec1.txt -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -d '{"title":"Dev Python","short_description":"Back Flask","category_id":1,"location":"Paris"}' | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+AD2=$(curl -s -b cookies_rec1.txt -X POST "http://127.0.0.1:5000/api/recruiter/ads" -H "Content-Type: application/json" -d '{"title":"Stage data","short_description":"SQL et Python","category_id":1}' | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+echo "AD=$AD AD2=$AD2"
+```
+
+Obtenu : 201 pour les 3 inscriptions, puis en base
+
+```bash
+114|rec1.test@example.com|1
+115|rec2.test@example.com|2
+116|bob.test@example.com|
+AD=54 AD2=55
+```
+
+Annonces du seed utilisées : 1 (TechNova, ouverte, 40 candidatures dont 1 et 2 de `seed.sql`), 2 (GreenWorks, fermée), 3 (TechNova, ouverte, 16 candidatures).
+
+# Test 1 : E-mails, une candidature puis une clôture (attendu : 201 puis 200, et une ligne [mail désactivé] dans le terminal du serveur à chaque fois)
+
+```bash
+# Bob postule à $AD2 -> attendu : 201 ; terminal : [mail désactivé] ... Sujet : Candidature reçue : Stage data
+curl -i -X POST -b cookies_bob.txt "http://127.0.0.1:5000/api/ads/$AD2/applications" -H "Content-Type: application/json" -d '{"message":"Bonjour, je suis intéressé."}'
+
+# Rec1 clôture $AD2 sans candidat retenu -> attendu : 200 "status": "closed" ; terminal : [mail désactivé] ... Sujet : Information concernant votre candidature : Stage data
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/$AD2/closure" -H "Content-Type: application/json" -d '{}'
+
+# vérification en base -> attendu : la candidature de Bob est rejected
+sqlite3 jobboard.db "SELECT applications.id, people.email, applications.status FROM applications JOIN people ON people.id = applications.person_id WHERE ad_id = $AD2;"
+```
+
+Code obtenu candidature : 201
+
+```json
+{
+  "ad_id": 55,
+  "created_at": "2026-10-15 12:47:41",
+  "id": 1361,
+  "message": "Bonjour, je suis intéressé.",
+  "person_id": 116,
+  "status": "pending"
+}
+```
+
+Code obtenu clôture : 200
+
+```json
+{
+  "category": "Développement",
+  "company": "TechNova",
+  "contact_id": 114,
+  "contract_type": null,
+  "created_at": "2026-10-15 12:47:41",
+  "description": null,
+  "id": 55,
+  "location": null,
+  "salary": null,
+  "short_description": "SQL et Python",
+  "status": "closed",
+  "title": "Stage data",
+  "working_time": null
+}
+```
+
+Obtenu dans le terminal du serveur : une ligne après la candidature, une ligne après la clôture
+
+```bash
+[mail désactivé] À : bob.test@example.com | Sujet : Candidature reçue : Stage data
+[mail désactivé] À : bob.test@example.com | Sujet : Information concernant votre candidature : Stage data
+```
+
+Obtenu en base
+
+```bash
+1361|bob.test@example.com|rejected
+```
+
+# Test 2 : GET /api/recruiter/ads/<id>/applications, candidatures d'une annonce (attendu : 200 avec les clés du contrat, [] pour une annonce sans candidature, 404 pour l'annonce d'une autre entreprise)
+
+```bash
+# annonce 1 (TechNova) -> attendu : 200, 40 candidatures, de la plus ancienne à la plus récente
+curl -i -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications"
+
+# annonce sans candidature -> attendu : 200, []
+curl -i -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/$AD/applications"
+
+# annonce 2 (GreenWorks) lue par Rec1 -> attendu : 404 Ad not found
+curl -i -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/2/applications"
+```
+
+Code obtenu annonce 1 : 200, 40 candidatures, chacune avec les 8 clés du contrat (la première ci-dessous)
+
+```json
+[
+  {
+    "created_at": "2025-01-10 09:00:00",
+    "email": "alice.martin@example.com",
+    "first_name": "Alice",
+    "id": 1,
+    "last_name": "Martin",
+    "message": "Bonjour, votre offre correspond à mon profil.",
+    "phone": "0600000001",
+    "status": "pending"
+  },
+  ...
+]
+```
+
+Code obtenu annonce sans candidature : 200
+
+```json
+[]
+```
+
+Code obtenu annonce d'une autre entreprise : 404
+
+```json
+{
+  "error": "Ad not found"
+}
+```
+
+# Test 3 : POST /api/recruiter/ads/<id>/closure, clôture recruteur (attendu : 200 avec accepted_application_id, 200 avec {}, 409 si déjà fermée)
+
+```bash
+# annonce 1, candidature 1 retenue -> attendu : 200 "status": "closed" ; en base 1 accepted, 39 rejected ; terminal : 40 lignes [mail désactivé]
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/closure" -H "Content-Type: application/json" -d '{"accepted_application_id": 1}'
+sqlite3 jobboard.db "SELECT status, COUNT(*) FROM applications WHERE ad_id = 1 GROUP BY status; SELECT id, status FROM applications WHERE id = 1;"
+
+# annonce 3, aucun candidat retenu -> attendu : 200 "status": "closed" ; en base les 16 candidatures rejected
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/3/closure" -H "Content-Type: application/json" -d '{}'
+sqlite3 jobboard.db "SELECT status, COUNT(*) FROM applications WHERE ad_id = 3 GROUP BY status;"
+
+# annonce 1 une 2e fois -> attendu : 409 Ad already closed
+curl -i -X POST -b cookies_rec1.txt "http://127.0.0.1:5000/api/recruiter/ads/1/closure" -H "Content-Type: application/json" -d '{}'
+```
+
+Code obtenu avec accepted_application_id : 200
+
+```json
+{
+  "category": "Développement",
+  "company": "TechNova",
+  "contact_id": 1,
+  "contract_type": "CDI",
+  "created_at": "2026-10-01 12:46:39",
+  "description": "you will dev many website",
+  "id": 1,
+  "location": "Paris",
+  "salary": 42000,
+  "short_description": "Back-end Flask",
+  "status": "closed",
+  "title": "Développeur Python",
+  "working_time": "Temps plein"
+}
+```
+
+Obtenu en base : 1 candidature retenue (la 1), les 39 autres refusées ; 40 lignes `[mail désactivé]` dans le terminal (sujet « Information concernant votre candidature : Développeur Python »)
+
+```bash
+accepted|1
+rejected|39
+1|accepted
+```
+
+Code obtenu avec {} : 200
+
+```json
+{
+  "category": "Développement",
+  "company": "TechNova",
+  "contact_id": 3,
+  "contract_type": "CDI",
+  "created_at": "2026-08-24 12:46:39",
+  "description": "you will defend our website against virus",
+  "id": 3,
+  "location": "Londres",
+  "salary": 100000,
+  "short_description": "Blue team",
+  "status": "closed",
+  "title": "Cybersécurité",
+  "working_time": "Temps plein"
+}
+```
+
+Obtenu en base : les 16 candidatures sont refusées ; 16 lignes `[mail désactivé]` dans le terminal
+
+```bash
+rejected|16
+```
+
+Code obtenu déjà fermée : 409
+
+```json
+{
+  "error": "Ad already closed"
+}
+```
+
+# Test 4 : PATCH /api/recruiter/ads/<id>, modification (attendu : 200 ; 400 No fields to update, Unknown field, Missing field, Unknown category_id ; 404 ; 409 sur une annonce fermée)
+
+```bash
+# 2 champs -> attendu : 200, title et salary changés, location toujours "Paris"
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"Dev Python senior","salary":45000}'
+
+# catégorie -> attendu : 200, "category": "Design", le titre modifié juste avant est conservé
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"category_id":2}'
+
+# corps vide, ou pas de corps -> attendu : 400 No fields to update (pour les 2)
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -b cookies_rec1.txt
+
+# champs interdits -> attendu : 400 Unknown field: company_id / status / contact_id
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"company_id":2}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"status":"closed"}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"contact_id":1}'
+
+# champ obligatoire envoyé vide ou null -> attendu : 400 Missing field: title / short_description
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":""}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"short_description":null}'
+
+# catégorie inconnue ou de mauvais type -> attendu : 400 Unknown category_id (pour les 2)
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"category_id":999}'
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"category_id":true}'
+
+# annonce inexistante -> attendu : 404 Ad not found
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/999" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"X"}'
+
+# ordre du contrat : le corps est vérifié avant l'annonce -> attendu : 400 Missing field: title (pas 404)
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/999" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":""}'
+
+# annonce 1, fermée au test 3 -> attendu : 409 Ad is closed
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/1" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"Nouveau titre"}'
+
+# vérification en base -> attendu : $AD modifiée, entreprise et contact inchangés ; annonce 1 inchangée
+sqlite3 jobboard.db "SELECT id, title, salary, category_id, company_id, contact_id, status FROM ads WHERE id IN (1, $AD);"
+```
+
+Code obtenu 2 champs : 200
+
+```json
+{
+  "category": "Développement",
+  "company": "TechNova",
+  "contact_id": 114,
+  "contract_type": null,
+  "created_at": "2026-10-15 12:47:41",
+  "description": null,
+  "id": 54,
+  "location": "Paris",
+  "salary": 45000,
+  "short_description": "Back Flask",
+  "status": "open",
+  "title": "Dev Python senior",
+  "working_time": null
+}
+```
+
+Code obtenu catégorie : 200
+
+```json
+{
+  "category": "Design",
+  "company": "TechNova",
+  "contact_id": 114,
+  "contract_type": null,
+  "created_at": "2026-10-15 12:47:41",
+  "description": null,
+  "id": 54,
+  "location": "Paris",
+  "salary": 45000,
+  "short_description": "Back Flask",
+  "status": "open",
+  "title": "Dev Python senior",
+  "working_time": null
+}
+```
+
+Code obtenu corps vide, pas de corps : 400 (pour les 2)
+
+```json
+{
+  "error": "No fields to update"
+}
+```
+
+Code obtenu champs interdits : 400 (pour les 3)
+
+```json
+{
+  "error": "Unknown field: company_id"
+}
+{
+  "error": "Unknown field: status"
+}
+{
+  "error": "Unknown field: contact_id"
+}
+```
+
+Code obtenu champ obligatoire vide ou null : 400 (pour les 2)
+
+```json
+{
+  "error": "Missing field: title"
+}
+{
+  "error": "Missing field: short_description"
+}
+```
+
+Code obtenu catégorie 999, catégorie true : 400 (pour les 2)
+
+```json
+{
+  "error": "Unknown category_id"
+}
+```
+
+Code obtenu annonce inexistante : 404
+
+```json
+{
+  "error": "Ad not found"
+}
+```
+
+Code obtenu annonce inexistante avec un titre vide : 400
+
+```json
+{
+  "error": "Missing field: title"
+}
+```
+
+Code obtenu annonce fermée : 409
+
+```json
+{
+  "error": "Ad is closed"
+}
+```
+
+Obtenu en base
+
+```bash
+1|Développeur Python|42000|1|1|1|closed
+54|Dev Python senior|45000|2|1|114|open
+```
+
+# Test 5 : deux recruteurs de deux entreprises (attendu : 404 Ad not found sur PATCH et DELETE appliqués à l'annonce de l'autre, base inchangée)
+
+Les trois autres routes (candidatures, clôture, refus) sont déjà vérifiées : test 2 ci-dessus et Test J9.
+
+```bash
+# avant -> les deux annonces
+sqlite3 jobboard.db "SELECT id, title, salary, company_id, status FROM ads WHERE id IN (2, $AD);"
+
+# Rec2 (GreenWorks) sur l'annonce $AD de TechNova -> attendu : 404 Ad not found (pour les 2)
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -b cookies_rec2.txt -d '{"title":"Piraté"}'
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/$AD" -b cookies_rec2.txt
+
+# Rec1 (TechNova) sur l'annonce 2 de GreenWorks -> attendu : 404 Ad not found (pour les 2)
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/2" -H "Content-Type: application/json" -b cookies_rec1.txt -d '{"title":"Piraté"}'
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/2" -b cookies_rec1.txt
+
+# après -> attendu : identique à avant
+sqlite3 jobboard.db "SELECT id, title, salary, company_id, status FROM ads WHERE id IN (2, $AD);"
+```
+
+Code obtenu : 404 (pour les 4)
+
+```json
+{
+  "error": "Ad not found"
+}
+```
+
+Obtenu en base, avant et après : identique
+
+```bash
+2|Data analyst|52000|2|closed
+54|Dev Python senior|45000|1|open
+```
+
+# Test 6 : Accès aux cinq routes recruteur (attendu : 401 sans session, 403 avec un compte ordinaire)
+
+```bash
+# sans session -> attendu : 401 Login required (pour les 5)
+curl -i "http://127.0.0.1:5000/api/recruiter/ads/1/applications"
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads/$AD/closure" -H "Content-Type: application/json" -d '{}'
+curl -i -X POST "http://127.0.0.1:5000/api/recruiter/ads/1/applications/2/rejection"
+curl -i -X PATCH "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -d '{"title":"X"}'
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/$AD"
+
+# compte ordinaire (Bob) -> attendu : 403 Recruiter only (pour les 5)
+curl -i -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications"
+curl -i -X POST -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/$AD/closure" -H "Content-Type: application/json" -d '{}'
+curl -i -X POST -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/1/applications/2/rejection"
+curl -i -X PATCH -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/$AD" -H "Content-Type: application/json" -d '{"title":"X"}'
+curl -i -X DELETE -b cookies_bob.txt "http://127.0.0.1:5000/api/recruiter/ads/$AD"
+
+# l'annonce $AD n'a pas été touchée -> attendu : toujours ouverte, même titre
+sqlite3 jobboard.db "SELECT id, title, status FROM ads WHERE id = $AD;"
+```
+
+Code obtenu sans session : 401 (pour les 5)
+
+```json
+{
+  "error": "Login required"
+}
+```
+
+Code obtenu compte ordinaire : 403 (pour les 5)
+
+```json
+{
+  "error": "Recruiter only"
+}
+```
+
+Obtenu en base
+
+```bash
+54|Dev Python senior|open
+```
+
+# Test 7 : DELETE /api/recruiter/ads/<id>, suppression (attendu : 409 avec candidatures, 404, puis 204 sans corps)
+
+```bash
+# annonce 1, qui a des candidatures -> attendu : 409 Ad has applications
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/1" -b cookies_rec1.txt
+
+# annonce inexistante -> attendu : 404 Ad not found
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/999" -b cookies_rec1.txt
+
+# $AD, sans candidature -> attendu : 204, sans corps
+curl -i -X DELETE "http://127.0.0.1:5000/api/recruiter/ads/$AD" -b cookies_rec1.txt
+
+# elle a disparu -> attendu : 404 Ad not found, puis aucune ligne en base ; l'annonce 1 existe toujours
+curl -i "http://127.0.0.1:5000/api/ads/$AD"
+sqlite3 jobboard.db "SELECT id FROM ads WHERE id = $AD;"
+sqlite3 jobboard.db "SELECT COUNT(*) FROM ads WHERE id = 1;"
+```
+
+Code obtenu annonce avec candidatures : 409
+
+```json
+{
+  "error": "Ad has applications"
+}
+```
+
+Code obtenu annonce inexistante : 404
+
+```json
+{
+  "error": "Ad not found"
+}
+```
+
+Code obtenu suppression : 204, aucun corps
+
+```bash
+HTTP/1.1 204 NO CONTENT
+Server: Werkzeug/3.1.9 Python/3.14.4
+Content-Type: text/html; charset=utf-8
+Vary: Cookie
+Connection: close
+```
+
+Code obtenu lecture après suppression : 404
+
+```json
+{
+  "error": "Ad not found"
+}
+```
+
+Obtenu en base : aucune ligne pour `$AD`, l'annonce 1 est toujours là
+
+```bash
+1
+```
