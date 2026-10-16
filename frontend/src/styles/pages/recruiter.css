@@ -70,10 +70,14 @@
   border-color: var(--color-blue);
 }
 
-/* Une seule colonne sur téléphone et petite tablette. */
+/* Une seule colonne sur téléphone et petite tablette ; le second titre se détache des cartes du dessus. */
 @media (max-width: 700px) {
   .recruiter-overview {
     grid-template-columns: 1fr;
+  }
+
+  .recruiter-overview > section + section {
+    margin-top: 32px;
   }
 }
 
@@ -129,6 +133,34 @@
 .postes-table .row-actions button, .postes-table .row-actions a.button-link {
   padding: 6px 14px;
   font-size: 14px;
+}
+
+/* Le titre du poste garde une largeur lisible et passe à la ligne entre les mots, pas au milieu
+   (base.css coupe partout les textes longs avec overflow-wrap: anywhere). */
+.postes-table td:first-child {
+  min-width: 9rem;
+  overflow-wrap: break-word;
+}
+
+/* Sur téléphone : Modifier et Supprimer l'un sous l'autre, dans une colonne collée au bord droit du cadre ;
+   le titre et les actions restent visibles, le nombre et le statut défilent dessous. */
+@media (max-width: 600px) {
+  .postes-table .row-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .postes-table .col-actions {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: var(--color-surface);
+    box-shadow: inset 1px 0 0 var(--color-line);
+  }
+
+  .postes-table th.col-actions {
+    background: var(--color-surface-blue);
+  }
 }
 
 /* Tableau « Candidatures reçues » (RecruiterApplicationsPage.jsx), dans le cadre .table-scroll (admin.css) :
@@ -191,6 +223,20 @@
 
 .candidatures-table tbody tr:hover .col-actions {
   background: var(--color-bg);
+}
+
+/* Sur téléphone, la colonne collée cacherait presque tout le tableau : elle défile avec les autres,
+   et « Retenir ce candidat » et « Refuser » passent l'un sous l'autre. */
+@media (max-width: 600px) {
+  .candidatures-table .col-actions {
+    position: static;
+    box-shadow: none;
+  }
+
+  .candidatures-table .row-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* Bouton rouge « Clôturer l'annonce », détaché du tableau. */

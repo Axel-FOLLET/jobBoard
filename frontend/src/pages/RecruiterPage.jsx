@@ -5,6 +5,11 @@ import { postesLesPlusRepondus, postesSansReponse } from '../recruiterSelection.
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../api.js'
 
+// Date du serveur (UTC, « AAAA-MM-JJ HH:MM:SS ») affichée en français, comme dans RecruiterApplicationsPage.jsx.
+function formatDate(value) {
+  return new Date(value.replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 export default function RecruiterPage() {
   // Annonces de l'entreprise du recruteur connecté (le serveur la lit dans la session).
   const [postes, setPostes] = useState([])
@@ -64,7 +69,7 @@ export default function RecruiterPage() {
                 <li key={poste.id} className="overview-card">
                   <Link to={`/recruteur/postes/${poste.id}/candidatures`}>
                     <strong title={poste.title}>{poste.title}</strong>
-                    <span>En attente depuis le {poste.oldest_unanswered_at.slice(0, 10)}</span>
+                    <span>En attente depuis le {formatDate(poste.oldest_unanswered_at)}</span>
                   </Link>
                 </li>
               ))}
