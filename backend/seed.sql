@@ -16,9 +16,9 @@ INSERT INTO people (first_name, last_name, email, phone) VALUES
   ('Chloé', 'Petit', 'chloe.petit@example.com', NULL);
 
 INSERT INTO ads (title, short_description, description, salary, location, working_time, contract_type, status, company_id, category_id, contact_id) VALUES
-  ('Développeur Python', 'Back-end Flask', 'you will dev many website', 42000, 'Paris', 'Temps plein', 'CDI', 'open', 1, 1, 1),
-  ('Data analyst', 'Analyse de données, SQL', 'you will analize many arrays', 52000, 'Mulhouse', '35h', 'Stage', 'closed', 2, 3, 2),
-  ('Cybersécurité', 'Blue team', 'you will defend our website against virus', 100000, 'Londres', 'Temps plein', 'CDI', 'open', 1, 1, 3);
+  ('Développeur Python', 'Back-end Flask', 'Vous développerez des sites web et leurs API en Flask.', 42000, 'Paris', 'Temps plein', 'CDI', 'open', 1, 1, 1),
+  ('Data analyst', 'Analyse de données, SQL', 'Vous analyserez des jeux de données et rédigerez des requêtes SQL.', 52000, 'Mulhouse', '35h', 'Stage', 'closed', 2, 3, 2),
+  ('Cybersécurité', 'Blue team', 'Vous protégerez nos sites web contre les attaques et les logiciels malveillants.', 100000, 'Londres', 'Temps plein', 'CDI', 'open', 1, 1, 3);
 
 INSERT INTO applications (ad_id, person_id, message, status, created_at) VALUES
   (1, 1, 'Bonjour, votre offre correspond à mon profil.', 'pending', '2025-01-10 09:00:00'),

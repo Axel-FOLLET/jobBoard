@@ -3,7 +3,7 @@
 // On demande des données au back :
 //   { id, title, applications_count, oldest_unanswered_at }
 // ...
-// Aucune route de l'API ne renvoie encore ces deux champs : voir docs/contrat_api.md.
+// Ces deux champs sont renvoyés par GET /api/recruiter/ads (backend/routes/recruiter.py) : voir docs/contrat_api.md.
 
 
 // Deux semaines, exprimées en millisecondes.

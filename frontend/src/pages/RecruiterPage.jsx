@@ -21,7 +21,7 @@ export default function RecruiterPage() {
       if (ok) {
         setPostes(data)
       } else {
-        // 401 et 403 seront gérés par RecruiterLayout (Task03) ; ici, un message général.
+        // 401 et 403 sont gérés par RecruiterLayout ; ici, un message général.
         setLoadError(true)
         console.error('Error fetching recruiter ads:', status, error)
       }

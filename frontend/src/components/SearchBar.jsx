@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { apiFetch } from '../api.js'
 
-// Filtres de GET /api/ads proposés ici (docs/contrat_api.md). category attend GET /api/categories, pas encore dans le back.
+// Filtres de GET /api/ads proposés ici (docs/contrat_api.md). Le filtre par catégorie de l'API n'est pas proposé dans la barre.
 const FILTERS = [
   { name: 'contract_type', label: 'Type de contrat' },
   { name: 'location', label: 'Lieu' },

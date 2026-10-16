@@ -250,3 +250,4 @@ Sur chaque annonce, le bouton « En savoir plus » affiche dans la carte toutes 
 - **Pas de protection CSRF.** Le cookie de session est `SameSite=Lax`, ce qui bloque l'envoi du cookie par la plupart des requêtes venues d'un autre site, mais aucun jeton CSRF n'est vérifié par l'API.
 - **Le salaire n'est pas contrôlé par l'API.** `POST` et `PATCH` acceptent une valeur non numérique (par exemple `"abc"`) ; seul le formulaire du site impose un nombre.
 - **Lancement en mode développement uniquement.** Le site tourne avec `npm run dev` et `python app.py` ; aucun build React n'est servi par Flask.
+- **Pas de bouton de clôture dans la page d'administration.** L'administrateur peut clôturer une annonce par l'API (`POST /api/ads/<id>/closure`), mais la page admin ne le propose pas ; dans le site, seul le recruteur clôture ses annonces.

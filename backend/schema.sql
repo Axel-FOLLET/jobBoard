@@ -1,4 +1,6 @@
 --suppression des tables si elles existent déjà dans la base de données. Sinon on passe à la suite.
+DROP TABLE IF EXISTS application_cvs;
+DROP TABLE IF EXISTS person_cvs;
 DROP TABLE IF EXISTS pending_email_changes;
 DROP TABLE IF EXISTS pending_registrations;
 DROP TABLE IF EXISTS applications;
