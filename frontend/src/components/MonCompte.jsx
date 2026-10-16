@@ -16,6 +16,45 @@ export default function MonCompte({ user }) {
     const [sendError, setSendError] = useState('')
     const [needLogin, setNeedLogin] = useState(false)
     const { setUser } = useContext(AuthContext)
+    // Changement d'adresse : petit formulaire séparé, ouvert par « Changer d'adresse ».
+    const [showEmailForm, setShowEmailForm] = useState(false)
+    const [newEmail, setNewEmail] = useState('')
+    const [password, setPassword] = useState('')
+    // emailStatus : idle, sending, sent, error ; sentTo = adresse à laquelle le lien est parti.
+    const [emailStatus, setEmailStatus] = useState('idle')
+    const [emailError, setEmailError] = useState('')
+    const [sentTo, setSentTo] = useState('')
+
+    // POST /api/auth/email-change : l'adresse ne change qu'après le clic sur le lien reçu à la nouvelle adresse.
+    const handleEmailSubmit = async (event) => {
+        event.preventDefault()
+        if (emailStatus === 'sending') return
+        const address = newEmail.trim()
+        setEmailError('')
+        setEmailStatus('sending')
+        const { status: httpStatus, error: apiError } = await apiFetch('/api/auth/email-change', {
+            method: 'POST',
+            body: { email: address, password },
+        })
+        if (httpStatus === 202) {
+            setSentTo(address)
+            setEmailStatus('sent')
+            setShowEmailForm(false)
+            setNewEmail('')
+            setPassword('')
+            return
+        }
+        // Refus de l'API : le détail technique va dans la console, la personne lit un message en français.
+        console.error(httpStatus, apiError)
+        setEmailStatus('error')
+        if (apiError === 'Invalid credentials') setEmailError('Mot de passe incorrect.')
+        else if (apiError === 'Login required') setEmailError("Votre session a expiré. Reconnectez-vous pour changer d'adresse.")
+        else if (apiError === 'Invalid value') setEmailError("C'est déjà votre adresse actuelle.")
+        else if (apiError === 'Invalid field: email') setEmailError('Adresse e-mail invalide.')
+        else if (apiError === 'Invalid field: password') setEmailError('Merci de saisir votre mot de passe actuel.')
+        else if (apiError === 'Email already used') setEmailError('Cette adresse est déjà utilisée.')
+        else setEmailError("Nous n'arrivons pas à envoyer la demande pour le moment. Merci de réessayer dans quelques instants.")
+    }
 
     const handleSubmit = async (event) => {
         // Empêche le rechargement de la page lors de la soumission du formulaire.
@@ -86,7 +125,9 @@ export default function MonCompte({ user }) {
 
     // noValidate : les messages du navigateur sont remplacés par les nôtres, en français.
     // form-columns (forms.css) : Nom/Prénom puis Téléphone/Adresse e-mail, par paires.
+    // Deux formulaires l'un sous l'autre : un formulaire ne peut pas en contenir un autre en HTML.
     return (
+        <>
         <form className="form-columns" onSubmit={handleSubmit} noValidate>
             <label>
                 Nom
@@ -125,5 +166,43 @@ export default function MonCompte({ user }) {
                 )}
             </div>
         </form>
+
+        {/* Changement d'adresse : nouvelle adresse et mot de passe actuel, qui prouve que c'est bien la titulaire du compte. */}
+        {!showEmailForm && (
+            <p>
+                <button type="button" className="button-secondary" onClick={() => { setShowEmailForm(true); setEmailStatus('idle'); setEmailError('') }}>
+                    Changer d&apos;adresse
+                </button>
+            </p>
+        )}
+        {showEmailForm && (
+            <form className="form-columns" onSubmit={handleEmailSubmit} noValidate>
+                <label>
+                    Nouvelle adresse e-mail
+                    <input type="email" name="newEmail" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                </label>
+
+                <label>
+                    Mot de passe actuel
+                    <input type="password" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </label>
+
+                <div className="form-actions">
+                    <button type="button" className="button-secondary" onClick={() => setShowEmailForm(false)}>Annuler</button>
+                    <button type="submit" disabled={emailStatus === 'sending'}>
+                        {emailStatus === 'sending' ? 'Envoi…' : "Changer d'adresse"}
+                    </button>
+                </div>
+            </form>
+        )}
+        <div aria-live="polite">
+            {emailStatus === 'sent' && (
+                <p>
+                    Un lien de confirmation a été envoyé à {sentTo}. Votre adresse actuelle reste active jusqu&apos;à la confirmation.
+                </p>
+            )}
+            {emailError && <p role="alert">{emailError}</p>}
+        </div>
+        </>
     )
 }
