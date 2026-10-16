@@ -120,6 +120,17 @@
   color: var(--color-text-secondary);
 }
 
+/* « Modifier » et « Supprimer » côte à côte, de la taille des actions du tableau des candidatures. */
+.postes-table .row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.postes-table .row-actions button, .postes-table .row-actions a.button-link {
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
 /* Tableau « Candidatures reçues » (RecruiterApplicationsPage.jsx), dans le cadre .table-scroll (admin.css) :
    mêmes cellules que le tableau d'administration. */
 .candidatures-table {
