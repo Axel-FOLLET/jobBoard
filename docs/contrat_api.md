@@ -4,7 +4,7 @@ Version : J5 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscript
 
 - Toutes les routes sont sous le préfixe **`/api`**. Les anciennes URL sans préfixe (`/ads`...) renvoient 404.
 - Toutes les réponses sont en **JSON**, sauf les réponses `204 No Content`.
-- Les corps de requête `POST` et `PATCH` sont en JSON (`Content-Type: application/json`).
+- Les corps de requête `POST` et `PATCH` sont en JSON (`Content-Type: application/json`). Seul l'envoi d'un CV utilise un formulaire `multipart/form-data` (voir [CV](#cv)).
 - Serveur de développement : `http://localhost:5000`.
 - Les routes d'administration nécessitent une connexion avec un compte ayant le rôle `admin`.
 
@@ -24,6 +24,7 @@ Version : J5 (schéma définitif, Blueprints, préfixe `/api`, filtres, inscript
 | ----------------------------- | -------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `POST /api/ads`               | **admin uniquement** | 201 : l'annonce créée                               | 401 `Login required` ; 403 `Admin only` ; 400 champ manquant, ou `company_id` / `category_id` inconnu |
 | `GET /api/me/applications`    | connecté             | 200 : candidatures de la personne connectée         | 401 `Login required`                                                                                |
+| `GET/PUT/DELETE /api/me/cv`, `GET /api/me/cv/file` | connecté | CV du profil (voir [CV](#cv)) | 401 `Login required` ; 400 `Invalid field: cv` ; 404 `CV not found` |
 
 ---
 
@@ -220,12 +221,13 @@ Le `person_id` utilisé pour la candidature correspond à l'utilisateur actuelle
 
 Ordre général des vérifications :
 
-1. vérification des champs obligatoires ;
-2. vérification de l'existence de l'annonce ;
-3. vérification que l'annonce n'est pas fermée ;
-4. identification ou création de la personne ;
-5. vérification d'une éventuelle candidature déjà existante ;
-6. insertion de la candidature.
+1. vérification du CV joint, s'il y en a un (voir [CV](#cv)) ;
+2. vérification des champs obligatoires, puis du CV du profil si `use_profile_cv` est demandé ;
+3. vérification de l'existence de l'annonce ;
+4. vérification que l'annonce n'est pas fermée ;
+5. identification ou création de la personne ;
+6. vérification d'une éventuelle candidature déjà existante ;
+7. insertion de la candidature et de son CV, dans la même transaction.
 
 ### Erreurs
 
@@ -238,6 +240,49 @@ Ordre général des vérifications :
 | 409  | `Already applied`               | la personne a déjà postulé à cette annonce       |
 
 Une candidature créée retourne **201**.
+
+---
+
+# CV
+
+Le CV est **facultatif**. C'est un **PDF de 2 Mo maximum** : le serveur vérifie que le fichier commence par la signature `%PDF-`, sans se fier au nom du fichier ni au type annoncé par le navigateur. Un fichier vide, trop lourd ou qui n'est pas un PDF reçoit 400 `Invalid field: cv`.
+
+Les CV sont gardés dans la base, dans deux tables créées automatiquement sur une base existante (`application_cvs.py`) :
+
+- `person_cvs` : le CV du profil, un seul par personne connectée, remplaçable ;
+- `application_cvs` : le CV joint à une candidature. C'est une **copie** : si le candidat change ensuite le CV de son profil, le recruteur garde celui qu'il a reçu.
+
+Une suppression de la personne ou de la candidature (CRUD admin) supprime son CV (`ON DELETE CASCADE`). Ces tables ne sont pas dans le CRUD d'administration.
+
+## Joindre un CV à une candidature
+
+`POST /api/ads/<id>/applications` accepte deux formats :
+
+- **JSON**, comme avant ; une personne connectée peut ajouter `"use_profile_cv": true` pour joindre une copie du CV de son profil ;
+- **`multipart/form-data`** : les mêmes champs en texte, plus le fichier dans le champ `cv`. Un fichier envoyé passe avant `use_profile_cv`.
+
+Le CV est vérifié **avant** toute écriture, puis enregistré dans la même transaction que la candidature.
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 400 | `Invalid field: cv` | fichier refusé, ou `use_profile_cv` alors que le profil n'a pas de CV |
+
+`use_profile_cv` est ignoré pour un visiteur.
+
+## CV du profil (espace candidat)
+
+Réservé aux personnes **connectées** (`@login_required`). La personne est toujours celle de la session : chacun ne voit et ne change que son propre CV.
+
+| Route | Succès | Erreurs |
+| --- | --- | --- |
+| `GET /api/me/cv` | 200 : `{"filename": "cv.pdf", "uploaded_at": "2026-10-16 09:30:00"}` | 401, 404 `CV not found` |
+| `GET /api/me/cv/file` | 200 : le PDF (`application/pdf`, en téléchargement, sous son nom d'origine) | 401, 404 `CV not found` |
+| `PUT /api/me/cv` | 200 : même réponse que `GET /api/me/cv`. Corps `multipart/form-data`, fichier dans le champ `cv` ; remplace le CV précédent | 401, 400 `Invalid field: cv` |
+| `DELETE /api/me/cv` | 204 ; les CV déjà joints à des candidatures restent | 401, 404 `CV not found` |
+
+## Téléchargement par le recruteur
+
+`GET /api/recruiter/ads/<id>/applications/<application_id>/cv` : voir [Espace recruteur](#espace-recruteur).
 
 ---
 
@@ -311,7 +356,7 @@ Pour la réponse de `POST /api/ads/<id>/applications` :
 }
 ```
 
-Clés : `id`, `ad_id`, `person_id`, `message`, `status`, `created_at`.
+Clés : `id`, `ad_id`, `person_id`, `message`, `status`, `created_at`, `has_cv` (`true` si un CV est joint).
 
 ---
 
@@ -1011,7 +1056,8 @@ L'accès aux routes d'administration, à la création d'annonces (`POST /api/ads
 | `GET/POST/PATCH/DELETE /api/admin/…`| `@admin_required` |
 | `GET /api/me/applications`          | `@login_required` |
 | `POST /api/auth/email-change`       | `@login_required` |
-| `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, `PATCH/DELETE /api/recruiter/ads/<id>`, `GET /api/recruiter/ads/<id>/applications`, `POST /api/recruiter/ads/<id>/closure` | vérification du recruteur (voir [Espace recruteur](#espace-recruteur)) |
+| `GET/PUT/DELETE /api/me/cv`, `GET /api/me/cv/file` | `@login_required` |
+| `GET/PATCH /api/recruiter/company`, `GET/POST /api/recruiter/ads`, `PATCH/DELETE /api/recruiter/ads/<id>`, `GET /api/recruiter/ads/<id>/applications`, `GET /api/recruiter/ads/<id>/applications/<application_id>/cv`, `POST /api/recruiter/ads/<id>/closure` | vérification du recruteur (voir [Espace recruteur](#espace-recruteur)) |
 
 ---
 
@@ -1075,6 +1121,7 @@ L'entreprise utilisée est **toujours** celle de la fiche de la personne connect
 | `PATCH /api/recruiter/ads/<id>` (J8) | 200 : l'annonce modifiée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 404, 400, 409 (voir ci-dessous) |
 | `DELETE /api/recruiter/ads/<id>` (J8) | 204 | 401, 403, 404, 409 (voir ci-dessous) |
 | `GET /api/recruiter/ads/<id>/applications` (J8) | 200 : les candidatures de l'annonce (`[]` possible) | 401, 403, 404 |
+| `GET /api/recruiter/ads/<id>/applications/<application_id>/cv` | 200 : le CV joint, en PDF | 401, 403, 404 (voir ci-dessous) |
 | `POST /api/recruiter/ads/<id>/closure` (J8) | 200 : l'annonce fermée, au format [Détail d'une annonce](#détail-dune-annonce) | 401, 403, 404, 400, 409 (voir ci-dessous) |
 | `POST /api/recruiter/ads/<id>/applications/<application_id>/rejection` (J9) | 200 : la candidature refusée | 401, 403, 404, 409 (voir ci-dessous) |
 
@@ -1184,7 +1231,17 @@ Les candidatures d'une annonce de l'entreprise, ouverte ou fermée, de la plus *
 ]
 ```
 
-Clés : `id`, `first_name`, `last_name`, `email`, `phone`, `message`, `status`, `created_at`. `id` est l'identifiant de la **candidature** : c'est lui qu'on envoie comme `accepted_application_id` à la clôture. Pas de pagination.
+Clés : `id`, `first_name`, `last_name`, `email`, `phone`, `message`, `status`, `created_at`, `has_cv` (`true` si un CV est joint). `id` est l'identifiant de la **candidature** : c'est lui qu'on envoie comme `accepted_application_id` à la clôture. Pas de pagination.
+
+### `GET /api/recruiter/ads/<id>/applications/<application_id>/cv`
+
+Le CV joint à la candidature : 200 et le PDF (`application/pdf`, en téléchargement, sous son nom d'origine).
+
+| Code | Message | Cas |
+| --- | --- | --- |
+| 404 | `Ad not found` | annonce inexistante ou d'une autre entreprise |
+| 404 | `Application not found` | candidature inexistante ou d'une autre annonce |
+| 404 | `CV not found` | la candidature n'a pas de CV |
 
 ### `POST /api/recruiter/ads/<id>/closure`
 
@@ -1252,6 +1309,15 @@ decision_email_sent_at TEXT   -- date d'envoi de la réponse (retenu ou non) ; N
   ALTER TABLE applications ADD COLUMN receipt_email_sent_at TEXT;
   ALTER TABLE applications ADD COLUMN decision_email_sent_at TEXT;
   ```
+
+---
+
+# Changements : dépôt de CV
+
+- CV en PDF (2 Mo maximum), facultatif, joint à une candidature en `multipart/form-data` ou copié depuis le profil (`use_profile_cv`) : voir [CV](#cv).
+- Nouvelles routes `GET/PUT/DELETE /api/me/cv`, `GET /api/me/cv/file` et `GET /api/recruiter/ads/<id>/applications/<application_id>/cv`.
+- Clé `has_cv` dans la réponse de `POST /api/ads/<id>/applications` et dans les candidatures de l'espace recruteur.
+- Tables `person_cvs` et `application_cvs`, créées automatiquement sur une base existante.
 
 ---
 

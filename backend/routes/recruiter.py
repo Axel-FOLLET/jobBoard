@@ -4,6 +4,7 @@ from auth_utils import current_user
 from db import get_db
 from routes.ads import fetch_ad, close_ad_in_db
 from mailer import notify_rejection
+import application_cvs
 
 recruiter = Blueprint("recruiter", __name__)
 
@@ -25,9 +26,18 @@ AD_REQUIRED = ["title", "short_description", "category_id"]
 
 # Une candidature avec son candidat, au format du contrat (liste et refus)
 APPLICATION_SELECT = """SELECT applications.id, people.first_name, people.last_name, people.email,
-                  people.phone, applications.message, applications.status, applications.created_at
+                  people.phone, applications.message, applications.status, applications.created_at,
+                  EXISTS (SELECT 1 FROM application_cvs
+                          WHERE application_cvs.application_id = applications.id) AS has_cv
            FROM applications
            JOIN people ON people.id = applications.person_id"""
+
+
+def application_json(row):
+    """Une ligne de APPLICATION_SELECT au format du contrat : has_cv en vrai ou faux."""
+    application = dict(row)
+    application["has_cv"] = bool(application["has_cv"])
+    return application
 
 # l'annonce, seulement si elle appartient à l'entreprise du recruteur ; sinon None
 def fetch_own_ad(conn, ad_id, company_id):
@@ -242,6 +252,7 @@ def create_company_ad(company_id):
 @recruiter_required
 def list_ad_applications(ad_id, company_id):
     conn = get_db()
+    application_cvs.ensure_tables(conn)
 
     if fetch_own_ad(conn, ad_id, company_id) is None:
         conn.close()
@@ -256,7 +267,36 @@ def list_ad_applications(ad_id, company_id):
     ).fetchall()
 
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify([application_json(r) for r in rows])
+
+
+#------------------- GET /api/recruiter/ads/<id>/applications/<application_id>/cv -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>/applications/<int:application_id>/cv", methods=["GET"])
+@recruiter_required
+def download_application_cv(ad_id, application_id, company_id):
+    conn = get_db()
+    application_cvs.ensure_tables(conn)
+
+    # annonce d'une autre entreprise ou inexistante : même 404
+    if fetch_own_ad(conn, ad_id, company_id) is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    # la candidature doit appartenir à cette annonce
+    application = conn.execute(
+        "SELECT id FROM applications WHERE id = ? AND ad_id = ?",
+        (application_id, ad_id),
+    ).fetchone()
+    if application is None:
+        conn.close()
+        return jsonify({"error": "Application not found"}), 404
+
+    row = application_cvs.application_file(conn, application_id)
+    conn.close()
+    if row is None:
+        return jsonify({"error": "CV not found"}), 404
+    return application_cvs.send_pdf(row)
 
 
 #------------------- POST /api/recruiter/ads/<id>/applications/<application_id>/rejection -------------------
@@ -265,6 +305,7 @@ def list_ad_applications(ad_id, company_id):
 @recruiter_required
 def reject_application(ad_id, application_id, company_id):
     conn = get_db()
+    application_cvs.ensure_tables(conn)
 
     # annonce d'une autre entreprise ou inexistante : même 404, rien n'est modifié
     ad = fetch_own_ad(conn, ad_id, company_id)
@@ -305,7 +346,7 @@ def reject_application(ad_id, application_id, company_id):
         (application_id,),
     ).fetchone()
     conn.close()
-    return jsonify(dict(row))
+    return jsonify(application_json(row))
 
 #------------------- PATCH /api/recruiter/ads -------------------
 

@@ -1,8 +1,9 @@
-// Onglet « Mes informations » de l'espace candidat : le formulaire de modification du compte.
+// Onglet « Mes informations » de l'espace candidat : le formulaire de modification du compte, puis le CV enregistré.
 import { useContext } from 'react'
 import { Link } from 'react-router'
 import { AuthContext } from '../AuthContext'
 import MonCompte from '../components/MonCompte.jsx'
+import MonCv from '../components/MonCv.jsx'
 
 export default function CandidateAccountPage() {
   const { user } = useContext(AuthContext)
@@ -16,6 +17,7 @@ export default function CandidateAccountPage() {
     <>
       <h1>Mes informations</h1>
       <MonCompte user={user} />
+      <MonCv />
     </>
   )
 }

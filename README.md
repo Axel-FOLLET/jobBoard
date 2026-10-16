@@ -1,6 +1,6 @@
 # PROJECT JOB BOARD - Y.I.A Jobs
 
-> À jour du 13/10/2026, fin du J7.
+> À jour du 16/10/2026.
 
 Y.I.A Jobs (initiales de Yohan, Ismail et Axel) est une plateforme d’annonces d’emploi développée avec React, Flask et SQLite.
 Projet Epitech réalisé à trois : Axel FOLLET (chef de projet, front-end), Yohan AVRONSART (back-end : données et métier) et Ismail BASSIT (back-end : comptes et sécurité).
@@ -21,12 +21,14 @@ JobBoard/
 │   ├── db.py                    ouverture de la base (clés étrangères activées)
 │   ├── auth_utils.py            clé secrète, cookie de session, personne connectée, @login_required, @admin_required
 │   ├── routes/
-│   │   ├── ads.py               annonces, candidatures, « Mes candidatures », clôture
+│   │   ├── ads.py               annonces, candidatures, « Mes candidatures », CV du profil, clôture
 │   │   ├── admin.py             CRUD d'administration des cinq tables
 │   │   ├── auth.py              inscription, connexion, déconnexion, compte
 │   │   ├── recruiter.py         catégories, espace recruteur (son entreprise et ses annonces)
 │   │   └── verification.py      confirmation de l'adresse e-mail
 │   ├── pending_registrations.py inscriptions en attente de confirmation de l'adresse
+│   ├── pending_email_changes.py changements d'adresse e-mail en attente de confirmation
+│   ├── application_cvs.py       CV en PDF : celui du profil et ceux joints aux candidatures
 │   ├── mailer.py                envoi des e-mails (SMTP), désactivable
 │   ├── login_limit.py           limite des essais de connexion (5 échecs en 15 minutes)
 │   ├── create_admin.py          crée le compte administrateur à partir du .env
@@ -115,7 +117,7 @@ La configuration est lue dans `backend/.env`, jamais dans le code. Ce fichier n'
 | --- | --- |
 | `SECRET_KEY` | signe le cookie de session ; l'API refuse de démarrer sans elle |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | compte administrateur créé par `create_admin.py` |
-| `COOKIE_SECURE` | `1` pour n'envoyer le cookie qu'en HTTPS (facultatif) |
+| `COOKIE_SECURE` | `1` pour n'envoyer le cookie qu'en HTTPS (facultatif, absent de `.env.example` : à ajouter soi-même) |
 | `APP_BASE_URL` | adresse du site, utilisée dans le lien de confirmation envoyé par e-mail |
 | `MAIL_ENABLED` | `1` pour envoyer les e-mails ; `0` ou absent : rien n'est envoyé, le message s'affiche dans le terminal de l'API |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | serveur d'envoi des e-mails |
@@ -130,8 +132,11 @@ Le cookie de session est `HttpOnly` et `SameSite=Lax` ; sa signature expire au b
 | `categories` | catégories d'annonces | id, name (unique) |
 | `people` | candidats, comptes et responsables d'annonces | id, first_name, last_name, email (unique), phone, password_hash, role (`user` / `admin`), company_id |
 | `ads` | annonces | id, title, short_description, description, salary, location, working_time, contract_type, status (`open` / `closed`), created_at, company_id, category_id, contact_id |
-| `applications` | candidatures | id, ad_id, person_id, message, status (`pending` / `accepted` / `rejected`), created_at |
+| `applications` | candidatures | id, ad_id, person_id, message, status (`pending` / `accepted` / `rejected`), created_at, receipt_email_sent_at, decision_email_sent_at (date d'envoi de l'accusé de réception et de la réponse ; `NULL` : pas envoyé) |
 | `pending_registrations` | inscriptions en attente de confirmation de l'adresse | id, person_id (unique), token_hash (unique), first_name, last_name, phone, password_hash, created_at, expires_at |
+| `pending_email_changes` | changements d'adresse e-mail en attente de confirmation | id, person_id (unique), new_email, token_hash (unique), created_at, expires_at |
+| `person_cvs` | CV enregistré dans l'espace candidat (un par personne) | person_id (clé primaire), filename, content (le PDF), uploaded_at |
+| `application_cvs` | CV joint à une candidature (une copie, un par candidature) | application_id (clé primaire), filename, content (le PDF), uploaded_at |
 
 ```text
 companies 1 ───< N ads N >─── 1 categories
@@ -143,6 +148,9 @@ companies 1 ───< N ads N >─── 1 categories
 ads 1 ───< N applications N >─── 1 people   (person_id : candidat)
 
 people 1 ─── 0..1 pending_registrations     (inscription en attente)
+people 1 ─── 0..1 pending_email_changes     (changement d'adresse en attente)
+people 1 ─── 0..1 person_cvs                (CV du profil)
+applications 1 ─── 0..1 application_cvs    (CV joint à la candidature)
 ```
 
 Relations :
@@ -159,9 +167,11 @@ Deux règles surprennent à la lecture :
 
 Une personne qui a candidaté sans compte est enregistrée dans `people` sans mot de passe. Si elle crée ensuite son compte avec la même adresse, l'inscription attend dans `pending_registrations` qu'elle ouvre le lien envoyé à cette adresse : connaître un e-mail ne donne jamais accès au compte ni aux candidatures de quelqu'un d'autre. Le jeton du lien n'est enregistré que haché ; il est valable 24 heures et ne sert qu'une fois. Cette table est créée automatiquement au premier usage si la base existe déjà.
 
+Les CV sont des PDF de 2 Mo maximum, enregistrés directement dans la base. Le CV joint à une candidature est une copie : le recruteur garde celui qu'il a reçu, même si le candidat remplace ou supprime ensuite le CV de son profil. Comme les deux tables d'attente, ces tables sont en `ON DELETE CASCADE` : un CV disparaît avec sa personne ou sa candidature. Elles sont créées automatiquement au premier usage si la base existe déjà, sans relancer `init_db.py`.
+
 ## Routes de l'API
 
-Toutes les routes sont sous `/api` et répondent en JSON. Le détail des champs, des codes et des messages est dans [`docs/contrat_api.md`](docs/contrat_api.md).
+Toutes les routes sont sous `/api` et répondent en JSON, sauf les téléchargements de CV, qui renvoient le PDF. Un CV s'envoie en `multipart/form-data`, dans un champ `cv`. Le détail des champs, des codes et des messages est dans [`docs/contrat_api.md`](docs/contrat_api.md).
 
 Accès : **public** (sans connexion), **connecté** (session ouverte), **recruteur** (connecté et rattaché à une entreprise), **admin** (compte de rôle `admin`).
 
@@ -171,7 +181,7 @@ Accès : **public** (sans connexion), **connecté** (session ouverte), **recrute
 | GET | `/api/ads/<id>` | public | Obtenir le détail d’une annonce (même fermée) | 200, 404 |
 | GET | `/api/companies/<id>/ads` | public | Lister les annonces ouvertes d’une entreprise | 200, 404 |
 | GET | `/api/categories` | public | Lister les catégories | 200 |
-| POST | `/api/ads/<id>/applications` | public | Enregistrer une candidature, avec ou sans compte | 201, 400, 401, 404, 409 |
+| POST | `/api/ads/<id>/applications` | public | Enregistrer une candidature, avec ou sans compte, avec un CV facultatif (fichier envoyé ou, connecté, CV du profil) | 201, 400, 401, 404, 409 |
 | POST | `/api/auth/register` | public | Créer un compte (ouvre la session) | 201, 202, 400, 409 |
 | POST | `/api/auth/verify` | public | Confirmer l'adresse d'une inscription en attente | 200, 400, 409 |
 | POST | `/api/auth/login` | public | Se connecter (ouvre la session) | 200, 400, 401, 429 |
@@ -180,11 +190,16 @@ Accès : **public** (sans connexion), **connecté** (session ouverte), **recrute
 | POST | `/api/auth/email-change` | connecté | Demander à changer son adresse e-mail (lien envoyé à la nouvelle adresse) | 202, 400, 401, 409 |
 | POST | `/api/auth/email-change/confirm` | public | Confirmer la nouvelle adresse avec le jeton du lien | 200, 400, 409 |
 | GET | `/api/me/applications` | connecté | Lister ses candidatures | 200, 401 |
+| GET | `/api/me/cv` | connecté | Lire le nom et la date du CV de son profil | 200, 401, 404 |
+| PUT | `/api/me/cv` | connecté | Enregistrer ou remplacer le CV de son profil | 200, 400, 401 |
+| DELETE | `/api/me/cv` | connecté | Supprimer le CV de son profil (les CV déjà joints restent) | 204, 401, 404 |
+| GET | `/api/me/cv/file` | connecté | Télécharger le CV de son profil | 200, 401, 404 |
 | GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (sauf le SIREN) | 200, 400, 401, 403 |
 | GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise ou en publier une | 200, 201, 400, 401, 403 |
 | PATCH | `/api/recruiter/ads/<id>` | recruteur | Modifier une annonce ouverte de son entreprise | 200, 400, 401, 403, 404, 409 |
 | DELETE | `/api/recruiter/ads/<id>` | recruteur | Supprimer une annonce de son entreprise qui n'a aucune candidature | 204, 401, 403, 404, 409 |
 | GET | `/api/recruiter/ads/<id>/applications` | recruteur | Lister les candidatures d'une annonce de son entreprise | 200, 401, 403, 404 |
+| GET | `/api/recruiter/ads/<id>/applications/<application_id>/cv` | recruteur | Télécharger le CV joint à une candidature | 200, 401, 403, 404 |
 | POST | `/api/recruiter/ads/<id>/closure` | recruteur | Clôturer une annonce de son entreprise, avec ou sans candidature retenue | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/recruiter/ads/<id>/applications/<application_id>/rejection` | recruteur | Refuser une candidature sans clôturer l'annonce | 200, 401, 403, 404, 409 |
 | POST | `/api/ads` | admin | Créer une annonce | 201, 400, 401, 403 |
@@ -214,45 +229,24 @@ Navigation sans rechargement de la page (React Router), avec une barre commune :
 | `/login` | Connexion |
 | `/account` | Création de compte : la session s'ouvre dès la création, puis l'accueil s'affiche |
 | `/verification` | Confirmation de l'adresse, ouverte depuis le lien reçu par e-mail |
+| `/confirmation-email` | Confirmation d'une nouvelle adresse e-mail, ouverte depuis le lien reçu à cette adresse |
 | `/espace-candidat` | Espace candidat, onglet « Mes candidatures » |
-| `/espace-candidat/informations` | Espace candidat, onglet « Mes informations » : modification du compte, adresse e-mail en lecture seule |
+| `/espace-candidat/informations` | Espace candidat, onglet « Mes informations » : modification du compte ; l'adresse e-mail change par « Changer d'adresse », confirmée par un lien ; section « Mon CV » pour enregistrer, remplacer, télécharger ou supprimer son CV |
 | `/recruteur` | Espace recruteur, onglet « Vue d'ensemble » |
 | `/recruteur/entreprise` | Espace recruteur, onglet « Mon entreprise » : fiche de l'entreprise, SIREN en lecture seule |
 | `/recruteur/postes` | Espace recruteur, onglet « Mes postes » : annonces de l'entreprise |
+| `/recruteur/postes/:id/candidatures` | Candidatures reçues pour une annonce : télécharger le CV, retenir ou refuser un candidat, clôturer l'annonce |
+| `/recruteur/postes/:id/modifier` | Modification d'une annonce ouverte |
 | `/recruteur/nouvelle-offre` | Espace recruteur, onglet « Publier une offre » |
 | `/admin` | Administration : les cinq tables, avec création, modification, suppression et pagination |
 | autre adresse | Page introuvable |
 
 Toutes ces pages lisent et écrivent dans l'API. Les espaces candidat et recruteur demandent d'être connecté : un visiteur y trouve un lien vers la connexion. Sans entreprise rattachée, l'espace recruteur indique que l'administration doit rattacher le compte. L'administration est réservée aux administrateurs : sinon, la page affiche un message sans rien demander à l'API.
 
-Sur chaque annonce, le bouton « En savoir plus » affiche dans la carte toutes les informations de l’annonce, sans fenêtre modale ; un message signale le chargement ou l’échec d’une requête. Le bouton « Postuler » ouvre sous l’annonce le formulaire de candidature, avec ou sans compte. Les textes de l’interface sont en français.
+Sur chaque annonce, le bouton « En savoir plus » affiche dans la carte toutes les informations de l’annonce, sans fenêtre modale ; un message signale le chargement ou l’échec d’une requête. Le bouton « Postuler » ouvre sous l’annonce le formulaire de candidature, avec ou sans compte ; on peut y joindre un CV en PDF, et une personne connectée qui a enregistré un CV le voit proposé par défaut. Les textes de l’interface sont en français.
 
-## Évolutions prévues
+## Limites connues
 
-Le planning sera revu après la soutenance de mi-parcours du 14/10. Ces fonctionnalités ne sont pas encore réalisées ; elles sont classées par ordre de priorité :
-
-
-**Prioritaire** :
-
-
-1. E-mails de réception, d’acceptation et de refus d’une candidature, avec leur suivi dans la table des
-   candidatures ;
-2. Consultation des candidatures reçues par le recruteur, avec acceptation ou refus ;
-
-**À faire** : 
-
-
-3. Modification, clôture et suppression d’une annonce depuis l’espace recruteur (la clôture existe déjà dans
-   l’API) ;
-4. Suite du design ;
-5. Vérification des parcours et de l’installation sur une machine neuve ;
-
-**Bonus** : 
-
-
-6. Badge « Nouveau » sur les annonces récentes ;
-7. Modification de l’adresse e-mail d’un compte, confirmée par un lien envoyé à la nouvelle adresse ;
-8. Dépôt d’un CV avec la candidature et téléchargement par le recruteur ;
-9. Protection CSRF des formulaires.
-
-*Le lancement du projet final à partir du build React sera documenté lorsqu’il sera en place.*
+- **Pas de protection CSRF.** Le cookie de session est `SameSite=Lax`, ce qui bloque l'envoi du cookie par la plupart des requêtes venues d'un autre site, mais aucun jeton CSRF n'est vérifié par l'API.
+- **Le salaire n'est pas contrôlé par l'API.** `POST` et `PATCH` acceptent une valeur non numérique (par exemple `"abc"`) ; seul le formulaire du site impose un nombre.
+- **Lancement en mode développement uniquement.** Le site tourne avec `npm run dev` et `python app.py` ; aucun build React n'est servi par Flask.
