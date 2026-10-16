@@ -12,8 +12,11 @@ export async function apiFetch(path, { body, headers, ...options } = {}) {
   // credentials : le cookie de session accompagne chaque appel, y compris côté administration.
   const init = { credentials: 'include', ...options, headers: { ...headers } }
 
-  // Un corps JavaScript est converti en JSON ; sans corps, aucun en-tête de type.
-  if (body !== undefined) {
+  // Un FormData (envoi d'un fichier, comme le CV) part tel quel : le navigateur écrit lui-même
+  // l'en-tête multipart. Un autre corps JavaScript est converti en JSON ; sans corps, aucun en-tête de type.
+  if (body instanceof FormData) {
+    init.body = body
+  } else if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json', ...init.headers }
     init.body = JSON.stringify(body)
   }

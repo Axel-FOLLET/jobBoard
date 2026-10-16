@@ -89,6 +89,26 @@ CREATE TABLE pending_registrations (
   FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
 );
 
+-- CV en PDF (2 Mo maximum), gardés dans la base. person_cvs : le CV du profil (espace candidat),
+-- un seul par personne. application_cvs : la copie jointe à une candidature ; elle ne change pas
+-- si le candidat remplace ensuite le CV de son profil.
+-- Même définition que application_cvs.py, qui crée les tables sur une base déjà en place.
+CREATE TABLE person_cvs (
+  person_id INTEGER PRIMARY KEY,
+  filename TEXT NOT NULL,
+  content BLOB NOT NULL,
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
+);
+
+CREATE TABLE application_cvs (
+  application_id INTEGER PRIMARY KEY,
+  filename TEXT NOT NULL,
+  content BLOB NOT NULL,
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+);
+
 -- Changement d’adresse e-mail en attente : la personne a demandé une nouvelle adresse
 -- (avec son mot de passe), mais n’a pas encore ouvert le lien envoyé à cette nouvelle adresse.
 -- La fiche people n’est modifiée qu’à la confirmation. Mêmes règles que pending_registrations :

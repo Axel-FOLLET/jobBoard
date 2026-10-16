@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from db import get_db
 from auth_utils import current_user, admin_required, login_required
 from mailer import notify_application_received, notify_closure
+import application_cvs
 
 
 bp = Blueprint("ads", __name__)
@@ -183,9 +184,24 @@ def create_ad():
 
 @bp.route("/ads/<int:ad_id>/applications", methods=["POST"])
 def create_application(ad_id):
-    data = request.get_json(silent=True) or {}
+    # Deux formats : JSON, ou formulaire multipart quand un CV est joint (champ fichier « cv »).
+    if request.mimetype == "multipart/form-data":
+        data = request.form.to_dict()
+    else:
+        data = request.get_json(silent=True) or {}
 
     user = current_user()
+
+    # CV joint : vérifié avant toute écriture (PDF de 2 Mo maximum).
+    cv = None
+    cv_file = request.files.get("cv")
+    if cv_file is not None and cv_file.filename:
+        cv = application_cvs.read_upload(cv_file)
+        if cv is None:
+            return jsonify({"error": "Invalid field: cv"}), 400
+
+    # Personne connectée sans nouveau fichier : elle peut joindre le CV de son profil.
+    use_profile_cv = user is not None and cv is None and data.get("use_profile_cv") in (True, "1", "true")
 
     # --------------------------------------------------
     # Utilisateur connecté
@@ -211,6 +227,12 @@ def create_application(ad_id):
         email = data["email"].strip().lower()
 
     conn = get_db()
+    application_cvs.ensure_tables(conn)
+
+    # CV du profil demandé, mais le profil n'en a pas
+    if use_profile_cv and application_cvs.profile_info(conn, person_id) is None:
+        conn.close()
+        return jsonify({"error": "Invalid field: cv"}), 400
 
     # --------------------------------------------------
     # Vérifier que l'annonce existe
@@ -300,6 +322,12 @@ def create_application(ad_id):
             )
         )
 
+        # CV joint ou copie du CV du profil, dans la même transaction que la candidature
+        if cv is not None:
+            application_cvs.attach(conn, cur.lastrowid, *cv)
+        elif use_profile_cv:
+            application_cvs.attach_profile(conn, cur.lastrowid, person_id)
+
         # Une seule transaction
         conn.commit()
 
@@ -315,7 +343,8 @@ def create_application(ad_id):
     # --------------------------------------------------
     row = conn.execute(
         """
-        SELECT id, ad_id, person_id, message, status, created_at
+        SELECT id, ad_id, person_id, message, status, created_at,
+               EXISTS (SELECT 1 FROM application_cvs WHERE application_id = applications.id) AS has_cv
         FROM applications
         WHERE id = ?
         """,
@@ -324,7 +353,9 @@ def create_application(ad_id):
 
     conn.close()
 
-    return jsonify(dict(row)), 201
+    application = dict(row)
+    application["has_cv"] = bool(application["has_cv"])
+    return jsonify(application), 201
 
 
 @bp.route("/me/applications", methods=["GET"])
@@ -345,6 +376,62 @@ def my_applications():
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
+
+
+#-------------------- CV du profil (espace candidat) --------------------
+# La personne est toujours celle de la session : chacun ne voit et ne change que son propre CV.
+
+@bp.route("/me/cv", methods=["GET"])
+@login_required
+def my_cv():
+    conn = get_db()
+    application_cvs.ensure_tables(conn)
+    row = application_cvs.profile_info(conn, current_user()["id"])
+    conn.close()
+    if row is None:
+        return jsonify({"error": "CV not found"}), 404
+    return jsonify(dict(row))
+
+
+@bp.route("/me/cv/file", methods=["GET"])
+@login_required
+def my_cv_file():
+    conn = get_db()
+    application_cvs.ensure_tables(conn)
+    row = application_cvs.profile_file(conn, current_user()["id"])
+    conn.close()
+    if row is None:
+        return jsonify({"error": "CV not found"}), 404
+    return application_cvs.send_pdf(row)
+
+
+@bp.route("/me/cv", methods=["PUT"])
+@login_required
+def upload_my_cv():
+    cv_file = request.files.get("cv")
+    cv = application_cvs.read_upload(cv_file) if cv_file is not None and cv_file.filename else None
+    if cv is None:
+        return jsonify({"error": "Invalid field: cv"}), 400
+
+    person_id = current_user()["id"]
+    conn = get_db()
+    application_cvs.ensure_tables(conn)
+    application_cvs.save_profile(conn, person_id, *cv)
+    row = application_cvs.profile_info(conn, person_id)
+    conn.close()
+    return jsonify(dict(row))
+
+
+@bp.route("/me/cv", methods=["DELETE"])
+@login_required
+def delete_my_cv():
+    conn = get_db()
+    application_cvs.ensure_tables(conn)
+    deleted = application_cvs.delete_profile(conn, current_user()["id"])
+    conn.close()
+    if not deleted:
+        return jsonify({"error": "CV not found"}), 404
+    return "", 204
 
 
 

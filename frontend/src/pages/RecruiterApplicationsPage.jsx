@@ -1,4 +1,4 @@
-// Candidatures reçues pour une annonce du recruteur (GET /api/recruiter/ads/<id>/applications),
+// Candidatures reçues pour une annonce du recruteur (GET /api/recruiter/ads/<id>/applications), avec leur CV,
 // clôture de l'annonce (POST /api/recruiter/ads/<id>/closure)
 // et refus d'un seul candidat (POST /api/recruiter/ads/<id>/applications/<application_id>/rejection).
 import { useEffect, useState } from 'react'
@@ -135,6 +135,7 @@ export default function RecruiterApplicationsPage() {
                 <th>E-mail</th>
                 <th>Téléphone</th>
                 <th>Message</th>
+                <th>CV</th>
                 <th>Envoyée le</th>
                 <th>Statut</th>
                 {canClose && <th className="col-actions"><span className="visually-hidden">Actions</span></th>}
@@ -149,6 +150,12 @@ export default function RecruiterApplicationsPage() {
                   <td>{application.phone ?? '—'}</td>
                   {/* Message coupé sur une ligne ; le texte entier s'affiche au survol. */}
                   <td className="cell-clip" title={application.message}>{application.message}</td>
+                  {/* Le PDF se télécharge directement depuis l'API (même origine grâce au proxy, cookie compris). */}
+                  <td>
+                    {application.has_cv ? (
+                      <a href={`/api/recruiter/ads/${id}/applications/${application.id}/cv`} download>Télécharger</a>
+                    ) : '—'}
+                  </td>
                   <td>{formatDate(application.created_at)}</td>
                   <td>{STATUS_LABELS[application.status] ?? application.status}</td>
                   {/* Annonce ouverte, candidature en attente : « Retenir ce candidat » clôture l'annonce en le retenant

@@ -12,6 +12,10 @@ const FIELD_NAMES = {
     message: 'message',
 }
 
+// CV facultatif : un PDF de 2 Mo maximum (même limite que l'API).
+const MAX_CV_SIZE = 2 * 1024 * 1024
+const CV_ERROR = 'Votre CV doit être un fichier PDF de 2 Mo maximum.'
+
 export default function Form({ id, onClose }) {
     // Un visiteur saisit son identité ; une personne connectée ne remplit que le message.
     const { user } = useContext(AuthContext)
@@ -25,6 +29,24 @@ export default function Form({ id, onClose }) {
     const [status, setStatus] = useState('idle')
     const [sendError, setSendError] = useState('')
     const [needLogin, setNeedLogin] = useState(false)
+    // CV : fichier choisi ici, ou CV enregistré dans l'espace candidat (personne connectée).
+    // cvChoice : 'profile' (CV enregistré), 'file' (un autre fichier) ou 'none'.
+    const [cvFile, setCvFile] = useState(null)
+    const [profileCv, setProfileCv] = useState(null)
+    const [cvChoice, setCvChoice] = useState('file')
+
+    // Personne connectée : le CV de son profil est proposé par défaut (404 : elle n'en a pas).
+    useEffect(() => {
+        if (!user) return
+        async function fetchProfileCv() {
+            const { ok, data } = await apiFetch('/api/me/cv')
+            if (ok) {
+                setProfileCv(data)
+                setCvChoice('profile')
+            }
+        }
+        fetchProfileCv()
+    }, [user])
 
     // Laisse le V se dessiner avant de fermer le formulaire.
     useEffect(() => {
@@ -72,6 +94,12 @@ export default function Form({ id, onClose }) {
             newErrors.message = 'Veuillez indiquer votre message.'
         }
 
+        // Le fichier choisi est vérifié avant l'envoi ; l'API refait la vérification.
+        const sendFile = cvChoice === 'file' && cvFile !== null
+        if (sendFile && (!/\.pdf$/i.test(cvFile.name) || cvFile.size > MAX_CV_SIZE)) {
+            newErrors.cv = CV_ERROR
+        }
+
         // Au moins une erreur de saisie : rien n'est envoyé au serveur.
         setErrors(newErrors)
         if (Object.keys(newErrors).length > 0) return
@@ -88,12 +116,25 @@ export default function Form({ id, onClose }) {
             }
         }
 
+        // CV du profil : le serveur en joint une copie à la candidature.
+        if (user && profileCv && cvChoice === 'profile') {
+            body.use_profile_cv = true
+        }
+
+        // Un fichier part dans un formulaire multipart, avec les autres champs ; sinon, en JSON.
+        let payload = body
+        if (sendFile) {
+            payload = new FormData()
+            Object.entries(body).forEach(([name, value]) => payload.append(name, value))
+            payload.append('cv', cvFile)
+        }
+
         setStatus('sending')
 
         try {
             const { status: httpStatus, error: apiError } = await apiFetch(`/api/ads/${id}/applications`, {
                 method: 'POST',
-                body,
+                body: payload,
             })
 
             // 201 : candidature enregistrée, l'effet plus haut referme le formulaire.
@@ -110,6 +151,8 @@ export default function Form({ id, onClose }) {
             if (httpStatus === 400 && apiError.startsWith('Missing field: ')) {
                 const field = apiError.replace('Missing field: ', '')
                 setSendError(`Il manque un champ : ${FIELD_NAMES[field] || field}.`)
+            } else if (httpStatus === 400 && apiError === 'Invalid field: cv') {
+                setSendError(CV_ERROR)
             } else if (httpStatus === 409 && apiError === 'Already applied') {
                 setSendError('Vous avez déjà candidaté à cette annonce.')
             } else if (httpStatus === 409 && apiError === 'Ad is closed') {
@@ -172,6 +215,27 @@ export default function Form({ id, onClose }) {
                     onChange={(event) => setMessage(event.target.value)} />
             </label>
             {errors.message && <p>{errors.message}</p>}
+
+            {/* Personne connectée qui a un CV dans son espace : il est joint par défaut, ou remplacé par un autre fichier. */}
+            {profileCv && (
+                <label>
+                    CV joint
+                    <select value={cvChoice} onChange={(event) => setCvChoice(event.target.value)}>
+                        <option value="profile">Mon CV enregistré : {profileCv.filename}</option>
+                        <option value="file">Un autre fichier</option>
+                        <option value="none">Aucun CV</option>
+                    </select>
+                </label>
+            )}
+
+            {cvChoice === 'file' && (
+                <label>
+                    {profileCv ? 'Autre CV (PDF, 2 Mo maximum)' : 'CV (PDF, 2 Mo maximum, facultatif)'}
+                    <input type="file" name="cv" accept="application/pdf,.pdf"
+                        onChange={(event) => setCvFile(event.target.files[0] ?? null)} />
+                </label>
+            )}
+            {errors.cv && <p>{errors.cv}</p>}
 
             {/* Bouton verrouillé pendant l'envoi : spinner, puis coche avant la fermeture. */}
             <button type="submit" disabled={status === 'sending' || status === 'sent'}>
