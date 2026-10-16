@@ -72,14 +72,14 @@ JobBoard/
 
 ### Back-end
 
-Les commandes suivantes s’exécutent depuis la racine du dépôt, dans un terminal WSL ou Linux. `init_db.py` recrée les tables : les données existantes sont supprimées. Il faut le relancer après toute modification de `schema.sql`.
+Les commandes suivantes s’exécutent depuis la racine du dépôt, dans un terminal WSL ou Linux. `init_db.py` recrée les tables : les données existantes sont supprimées, compte administrateur compris. Il faut le relancer après toute modification de `schema.sql`, puis relancer `seed_data.py` et `create_admin.py`.
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate
+python3 -m venv venv            # sous WSL ou Ubuntu, la commande « python » peut ne pas exister avant le venv
+source venv/bin/activate        # dans le venv, « python » fonctionne
 pip install -r requirements.txt
-cp .env.example .env            # puis remplacer les valeurs « change-me » (voir Configuration)
+cp .env.example .env            # puis remplir .env comme décrit ci-dessous, avant la suite
 python init_db.py               # crée jobboard.db et affiche le nombre de lignes par table
 python seed_data.py             # ajoute une cinquantaine d'annonces (à relancer seulement après init_db.py)
 python create_admin.py          # crée l'administrateur décrit dans .env
@@ -88,13 +88,19 @@ python app.py                   # API sur http://localhost:5000
 
 Sous Windows avec PowerShell, le venv s’active avec `.\venv\Scripts\Activate.ps1`.
 
+Dans `backend/.env`, avant `init_db.py` (le rôle de chaque clé est dans [Configuration](#configuration)) :
+
+- `SECRET_KEY` : remplacer `change-me` par une chaîne aléatoire, par exemple celle que donne `python3 -c "import secrets; print(secrets.token_hex(32))"`.
+- `ADMIN_EMAIL` et `ADMIN_PASSWORD` : les identifiants de l'administrateur, à choisir **avant** `create_admin.py`. Les modifier ensuite n'a aucun effet : le script répond `Admin déjà existant` et garde l'ancien mot de passe.
+- E-mails : laisser `MAIL_ENABLED=0` pour tester. Rien n'est envoyé, et chaque e-mail (avec le lien de vérification d'une inscription ou d'un changement d'adresse) s'affiche dans le terminal de l'API, sur une ligne `[mail désactivé]`. Les clés `SMTP_*` et `MAIL_FROM` ne servent qu'avec `MAIL_ENABLED=1` : le compte d'envoi du projet est `jobboardtest.yiajobs@gmail.com`, et `SMTP_PASSWORD` est son mot de passe d'application Gmail (16 lettres, pas le mot de passe du compte), communiqué par l'équipe et jamais écrit dans le dépôt.
+
 ### Front-end
 
 Dans un second terminal, depuis la racine du dépôt :
 ```bash
 cd frontend
 npm install
-npm run dev                     # interface sur http://localhost:5173
+npm run dev                     # interface sur http://localhost:5173, à ouvrir dans le navigateur
 ```
 
 Vite transmet à Flask tous les appels dont l’adresse commence par `/api` (proxy de `vite.config.js`) : le navigateur ne parle qu'à une seule origine, ce qui évite les erreurs CORS.
@@ -171,9 +177,16 @@ Accès : **public** (sans connexion), **connecté** (session ouverte), **recrute
 | POST | `/api/auth/login` | public | Se connecter (ouvre la session) | 200, 400, 401, 429 |
 | POST | `/api/auth/logout` | public | Se déconnecter | 204 |
 | GET, PATCH | `/api/auth/me` | connecté | Lire ou modifier son compte (sauf l'adresse e-mail) | 200, 400, 401, 409 |
+| POST | `/api/auth/email-change` | connecté | Demander à changer son adresse e-mail (lien envoyé à la nouvelle adresse) | 202, 400, 401, 409 |
+| POST | `/api/auth/email-change/confirm` | public | Confirmer la nouvelle adresse avec le jeton du lien | 200, 400, 409 |
 | GET | `/api/me/applications` | connecté | Lister ses candidatures | 200, 401 |
 | GET, PATCH | `/api/recruiter/company` | recruteur | Lire ou modifier son entreprise (sauf le SIREN) | 200, 400, 401, 403 |
 | GET, POST | `/api/recruiter/ads` | recruteur | Lister les annonces de son entreprise ou en publier une | 200, 201, 400, 401, 403 |
+| PATCH | `/api/recruiter/ads/<id>` | recruteur | Modifier une annonce ouverte de son entreprise | 200, 400, 401, 403, 404, 409 |
+| DELETE | `/api/recruiter/ads/<id>` | recruteur | Supprimer une annonce de son entreprise qui n'a aucune candidature | 204, 401, 403, 404, 409 |
+| GET | `/api/recruiter/ads/<id>/applications` | recruteur | Lister les candidatures d'une annonce de son entreprise | 200, 401, 403, 404 |
+| POST | `/api/recruiter/ads/<id>/closure` | recruteur | Clôturer une annonce de son entreprise, avec ou sans candidature retenue | 200, 400, 401, 403, 404, 409 |
+| POST | `/api/recruiter/ads/<id>/applications/<application_id>/rejection` | recruteur | Refuser une candidature sans clôturer l'annonce | 200, 401, 403, 404, 409 |
 | POST | `/api/ads` | admin | Créer une annonce | 201, 400, 401, 403 |
 | POST | `/api/ads/<id>/closure` | admin | Clôturer une annonce et désigner la candidature retenue | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/admin/<table>` | admin | Lister les lignes d'une table, avec pagination | 200, 400, 401, 403, 404 |

@@ -306,3 +306,87 @@ def reject_application(ad_id, application_id, company_id):
     ).fetchone()
     conn.close()
     return jsonify(dict(row))
+
+#------------------- PATCH /api/recruiter/ads -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>", methods=["PATCH"])
+@recruiter_required
+def update_company_ad(ad_id, company_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    if not data:
+        return jsonify({"error": "No fields to update"}), 400
+    
+
+    for field in data:
+        if field not in AD_FIELDS: 
+            return jsonify({"error": f"Unknown field: {field}"}), 400
+
+    for field in AD_REQUIRED:
+        if field in data and data[field] in (None, ""):
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    conn = get_db()
+
+    ad = fetch_own_ad(conn, ad_id, company_id)
+    
+    if ad is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    if ad["status"] == "closed":
+        conn.close()
+        return jsonify({"error": "Ad is closed"}), 409
+
+    # category_id vérifié seulement s'il est envoyé
+    if "category_id" in data:
+        category_id = data["category_id"]
+        if isinstance(category_id, bool) or not isinstance(category_id, (int, str)):
+            conn.close()
+            return jsonify({"error": "Unknown category_id"}), 400
+
+        category = conn.execute(
+            "SELECT id FROM categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            conn.close()
+            return jsonify({"error": "Unknown category_id"}), 400
+
+    # seuls les champs envoyés changent
+    fields = list(data.keys())
+    assignments = ", ".join(f"{field} = ?" for field in fields)  # noms tirés de AD_FIELDS
+    values = [data[field] for field in fields]
+
+    conn.execute(
+        f"UPDATE ads SET {assignments} WHERE id = ? AND company_id = ?",
+        values + [ad_id, company_id],
+    )
+    conn.commit()
+
+    row = fetch_ad(conn, ad_id)
+    conn.close()
+    return jsonify(dict(row)), 200
+
+#------------------- DELETE /api/recruiter/ads/<id> -------------------
+
+@recruiter.route("/recruiter/ads/<int:ad_id>", methods=["DELETE"])
+@recruiter_required
+def delete_company_ad(ad_id, company_id):
+    conn = get_db()
+
+    if fetch_own_ad(conn, ad_id, company_id) is None:
+        conn.close()
+        return jsonify({"error": "Ad not found"}), 404
+
+    if conn.execute(
+        "SELECT 1 FROM applications WHERE ad_id = ? LIMIT 1", (ad_id,)
+    ).fetchone() is not None:
+        conn.close()
+        return jsonify({"error": "Ad has applications"}), 409
+    
+    conn.execute("DELETE FROM ads WHERE id = ?", (ad_id,))
+    conn.commit()
+    conn.close()
+    return "", 204
