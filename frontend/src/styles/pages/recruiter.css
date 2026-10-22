@@ -15,6 +15,7 @@
   display: grid;
   grid-row: span 2;
   grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Titres des colonnes sans grande marge haute, pour démarrer à la même hauteur. */
@@ -73,7 +74,7 @@
 /* Une seule colonne sur téléphone et petite tablette ; le second titre se détache des cartes du dessus. */
 @media (max-width: 700px) {
   .recruiter-overview {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .recruiter-overview > section + section {
