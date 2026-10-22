@@ -43,9 +43,9 @@ export default function Footer() {
           <h3>Données personnelles</h3>
           <p>Données collectées : nom, prénom, adresse e-mail, téléphone (facultatif), mot de passe (conservé sous forme d'empreinte, jamais en clair) et messages de candidature.</p>
           <p>Elles servent à créer et gérer votre compte, à vérifier votre adresse e-mail et à transmettre vos candidatures au recruteur de l'offre concernée. Base légale : l'exécution du service que vous demandez en créant un compte ou en postulant (RGPD, art. 6.1.b).</p>
-          <p>Destinataires : l'équipe d'administration du site, le recruteur de l'offre à laquelle vous postulez, et Google, dont le service de messagerie envoie les e-mails du site. Le lien de vérification envoyé par e-mail est valable 24 heures.</p>
+          <p>Destinataires : l'équipe d'administration du site et le recruteur de l'offre à laquelle vous postulez. Sur cette démonstration, l'envoi d'e-mails est désactivé : aucun e-mail n'est envoyé.</p>
           <p>Durée de conservation : un an.</p>
-          <p>Vous pouvez demander l'accès à vos données, leur rectification, leur effacement ou la limitation de leur traitement à l'adresse de contact ci-dessus, et adresser une réclamation à la <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener noreferrer">CNIL</a>.</p>
+          <p>Vous pouvez demander l'accès à vos données, leur rectification, leur effacement ou la limitation de leur traitement par le lien de contact ci-dessus, et adresser une réclamation à la <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener noreferrer">CNIL</a>.</p>
 
           <h3>Cookies</h3>
           <p>Un seul cookie, nécessaire à la connexion : il garde votre session ouverte et ne sert à aucune mesure d'audience ni publicité. Il est donc dispensé de consentement.</p>
