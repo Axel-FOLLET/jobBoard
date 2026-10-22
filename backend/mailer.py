@@ -4,9 +4,9 @@ Les réglages viennent de .env (jamais du code) :
     MAIL_ENABLED=1                 # 0 ou absent : rien n'est envoyé, le message s'affiche dans le terminal
     SMTP_HOST=smtp.gmail.com
     SMTP_PORT=587
-    SMTP_USER=jobboardtest.yiajobs@gmail.com
+    SMTP_USER=adresse@example.com  # le compte d'envoi de l'équipe, seulement dans .env
     SMTP_PASSWORD=...              # seulement dans .env
-    MAIL_FROM=jobboardtest.yiajobs@gmail.com
+    MAIL_FROM=adresse@example.com
 
 Règle importante : un email qui échoue ne doit jamais faire échouer la candidature ni la clôture.
 Les fonctions renvoient donc True ou False, et ne lèvent jamais d'exception.

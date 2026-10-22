@@ -1,6 +1,6 @@
 // Pied de page commun, en deux colonnes : navigation, puis mentions légales (LCEN, art. 1-1)
 // et information sur les données (RGPD, art. 13), repliées. Contenu validé par l'équipe ;
-// le site reste en local, d'où l'absence d'hébergeur.
+// la démonstration est hébergée sur Render (voir README, « Déploiement sur Render »).
 import { useContext } from 'react'
 import { Link } from 'react-router'
 import { AuthContext } from '../AuthContext'
@@ -35,10 +35,10 @@ export default function Footer() {
 
           <h3>Éditeur</h3>
           <p>Y.I.A Jobs est un projet pédagogique non professionnel réalisé à Epitech par Axel FOLLET, Yohan AVRONSART et Ismail BASSIT.</p>
-          <p>Directeur de la publication : Axel FOLLET. Contact : <a href="mailto:jobboardtest.yiajobs@gmail.com">jobboardtest.yiajobs@gmail.com</a>.</p>
+          <p>Directeur de la publication : Axel FOLLET. Contact : <a href="https://github.com/Axel-FOLLET/jobBoard" target="_blank" rel="noopener noreferrer">dépôt GitHub du projet</a>.</p>
 
           <h3>Hébergement</h3>
-          <p>Aucun : le site n'est pas mis en ligne, il fonctionne uniquement en local pour le projet.</p>
+          <p>Démonstration hébergée sur Render (render.com) ; les données de démonstration sont fictives et remises à zéro à chaque redémarrage du service.</p>
 
           <h3>Données personnelles</h3>
           <p>Données collectées : nom, prénom, adresse e-mail, téléphone (facultatif), mot de passe (conservé sous forme d'empreinte, jamais en clair) et messages de candidature.</p>

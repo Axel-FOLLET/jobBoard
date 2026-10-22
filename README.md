@@ -1,6 +1,6 @@
 # PROJECT JOB BOARD - Y.I.A Jobs
 
-> À jour du 16/10/2026.
+> À jour du 22/10/2026.
 
 Y.I.A Jobs (initiales de Yohan, Ismail et Axel) est une plateforme d’annonces d’emploi développée avec React, Flask et SQLite.
 Projet Epitech réalisé à trois : Axel FOLLET (chef de projet, front-end), Yohan AVRONSART (back-end : données et métier) et Ismail BASSIT (back-end : comptes et sécurité).
@@ -12,12 +12,13 @@ Projet Epitech réalisé à trois : Axel FOLLET (chef de projet, front-end), Yoh
 | Base de données | SQLite (fichier `backend/jobboard.db`) |
 | Back-end / API | Python, Flask 3, sessions par cookie, python-dotenv |
 | Front-end | React 19, React Router 8, Vite 8, ESLint |
+| Déploiement | Render (gunicorn ; Flask sert le build React), décrit dans `render.yaml` |
 
 ## Structure du dépôt
 ```
 JobBoard/
 ├── backend/                     API Flask et base de données
-│   ├── app.py                   crée l'application et enregistre les blueprints (port 5000)
+│   ├── app.py                   crée l'application, enregistre les blueprints et sert frontend/dist s'il existe (port 5000)
 │   ├── db.py                    ouverture de la base (clés étrangères activées)
 │   ├── auth_utils.py            clé secrète, cookie de session, personne connectée, @login_required, @admin_required
 │   ├── routes/
@@ -32,11 +33,11 @@ JobBoard/
 │   ├── mailer.py                envoi des e-mails (SMTP), désactivable
 │   ├── login_limit.py           limite des essais de connexion (5 échecs en 15 minutes)
 │   ├── create_admin.py          crée le compte administrateur à partir du .env
+│   ├── demo.py                  mode démo (DEMO_MODE=1) : trois comptes et la route GET /api/demo/login
 │   ├── schema.sql               création des tables
 │   ├── seed.sql                 données de test
 │   ├── init_db.py               crée jobboard.db à partir de schema.sql et seed.sql
 │   ├── seed_data.py             remplit la base à partir de data/annonces.json (une seule fois)
-│   ├── migrate_siren.py         ajoute le SIREN à une base existante sans la réinitialiser
 │   ├── data/annonces.json       données des annonces pour le remplissage de la base
 │   ├── queries.sql              requêtes d'exemple
 │   ├── checks.sql               insertions qui doivent échouer (tests des contraintes)
@@ -50,19 +51,20 @@ JobBoard/
 │   ├── choix_techniques_front.md            choix techniques du front-end
 │   ├── choix_techniques_back_donnees.md     choix techniques du back-end : données et API
 │   ├── choix_techniques_comptes_securite.md choix techniques du back-end : comptes et sécurité
-│   ├── usage_ia.md              usage de l'IA par chaque membre de l'équipe
-│   └── YIA_Jobs_soutenance.pptx support de la soutenance (et sa version PDF)
-└── frontend/                    interface React (Vite)
-    ├── index.html
-    ├── vite.config.js           proxy des appels /api vers l'API Flask
-    └── src/
-        ├── App.jsx              routes de l'interface
-        ├── api.js               point d'accès unique à l'API (cookie, JSON, erreurs)
-        ├── AuthProvider.jsx     personne connectée, partagée par toutes les pages
-        ├── adminTables.js       description des cinq tables pour l'administration
-        ├── components/          habillage commun, pied de page, barre de recherche, carte d'annonce, formulaires
-        ├── pages/               une page par adresse
-        └── styles/              feuilles de style, une par usage
+│   └── usage_ia.md              usage de l'IA par chaque membre de l'équipe
+├── frontend/                    interface React (Vite)
+│   ├── index.html
+│   ├── vite.config.js           proxy des appels /api vers l'API Flask
+│   └── src/
+│       ├── App.jsx              routes de l'interface
+│       ├── api.js               point d'accès unique à l'API (cookie, JSON, erreurs)
+│       ├── AuthProvider.jsx     personne connectée, partagée par toutes les pages
+│       ├── adminTables.js       description des cinq tables pour l'administration
+│       ├── components/          habillage commun, pied de page, barre de recherche, carte d'annonce, formulaires
+│       ├── pages/               une page par adresse
+│       └── styles/              feuilles de style, une par usage
+├── render.yaml                  déploiement sur Render (build, démarrage, variables)
+└── .gitignore
 ```
 
 ## Prérequis
@@ -94,7 +96,7 @@ Dans `backend/.env`, avant `init_db.py` (le rôle de chaque clé est dans [Confi
 
 - `SECRET_KEY` : remplacer `change-me` par une chaîne aléatoire, par exemple celle que donne `python3 -c "import secrets; print(secrets.token_hex(32))"`.
 - `ADMIN_EMAIL` et `ADMIN_PASSWORD` : les identifiants de l'administrateur, à choisir **avant** `create_admin.py`. Les modifier ensuite n'a aucun effet : le script répond `Admin déjà existant` et garde l'ancien mot de passe.
-- E-mails : laisser `MAIL_ENABLED=0` pour tester. Rien n'est envoyé, et chaque e-mail (avec le lien de vérification d'une inscription ou d'un changement d'adresse) s'affiche dans le terminal de l'API, sur une ligne `[mail désactivé]`. Les clés `SMTP_*` et `MAIL_FROM` ne servent qu'avec `MAIL_ENABLED=1` : le compte d'envoi du projet est `jobboardtest.yiajobs@gmail.com`, et `SMTP_PASSWORD` est son mot de passe d'application Gmail (16 lettres, pas le mot de passe du compte), communiqué par l'équipe et jamais écrit dans le dépôt.
+- E-mails : laisser `MAIL_ENABLED=0` pour tester. Rien n'est envoyé, et chaque e-mail (avec le lien de vérification d'une inscription ou d'un changement d'adresse) s'affiche dans le terminal de l'API, sur une ligne `[mail désactivé]`. Les clés `SMTP_*` et `MAIL_FROM` ne servent qu'avec `MAIL_ENABLED=1` : `SMTP_USER` est le compte Gmail d'envoi de l'équipe, et `SMTP_PASSWORD` son mot de passe d'application Gmail (16 lettres, pas le mot de passe du compte), communiqués par l'équipe et jamais écrits dans le dépôt.
 
 ### Front-end
 
@@ -106,6 +108,10 @@ npm run dev                     # interface sur http://localhost:5173, à ouvrir
 ```
 
 Vite transmet à Flask tous les appels dont l’adresse commence par `/api` (proxy de `vite.config.js`) : le navigateur ne parle qu'à une seule origine, ce qui évite les erreurs CORS.
+
+### Site complet servi par Flask
+
+Comme en production, Flask peut servir le site construit, sans `npm run dev` : `npm run build` dans `frontend/` produit `frontend/dist/`, que `app.py` sert dès qu'il existe (les adresses des pages React renvoient `index.html`). Le site est alors sur http://localhost:5000.
 
 ## Configuration
 
@@ -121,8 +127,25 @@ La configuration est lue dans `backend/.env`, jamais dans le code. Ce fichier n'
 | `APP_BASE_URL` | adresse du site, utilisée dans le lien de confirmation envoyé par e-mail |
 | `MAIL_ENABLED` | `1` pour envoyer les e-mails ; `0` ou absent : rien n'est envoyé, le message s'affiche dans le terminal de l'API |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | serveur d'envoi des e-mails |
+| `DEMO_MODE` | `1` active le mode démo (voir [Déploiement sur Render](#déploiement-sur-render)) ; absent ou autre valeur : rien n'est ajouté |
 
 Le cookie de session est `HttpOnly` et `SameSite=Lax` ; sa signature expire au bout d'un jour. Les mots de passe sont enregistrés hachés (`scrypt`).
+
+## Déploiement sur Render
+
+`render.yaml`, à la racine, décrit un seul service web gratuit : le build installe les dépendances et construit le front (`npm ci && npm run build`, `pip install`), puis le démarrage recrée la base (`init_db.py`, `seed_data.py`, `create_admin.py`) et lance `gunicorn` sur le port fourni par Render (`$PORT`). Le système de fichiers de Render est éphémère : à chaque redémarrage ou nouveau déploiement, la base repart des données de démonstration, ce qui remet la démo à zéro.
+
+Variables à saisir à la création du service : `ADMIN_EMAIL` et `ADMIN_PASSWORD`. `SECRET_KEY` est générée par Render ; `DEMO_MODE=1`, `MAIL_ENABLED=0` (Render bloque le SMTP sortant sur l'offre gratuite) et `COOKIE_SECURE=1` sont fixées dans le fichier.
+
+Le mode démo (`DEMO_MODE=1`, `backend/demo.py`) crée au démarrage trois comptes aux mots de passe aléatoires et ajoute une route :
+
+| Méthode | Route | Effet |
+| --- | --- | --- |
+| GET | `/api/demo/login?role=candidat` | ouvre la session du candidat de démo (deux candidatures déjà déposées) et redirige vers `/espace-candidat` |
+| GET | `/api/demo/login?role=recruteur` | ouvre la session du recruteur de démo, rattaché à l'entreprise qui a le plus d'annonces, et redirige vers `/recruteur` |
+| GET | `/api/demo/login?role=admin` | ouvre la session de l'administrateur de démo et redirige vers `/admin` |
+
+Un rôle inconnu renvoie 400 ; sans `DEMO_MODE=1`, la route n'existe pas (404).
 
 ## Base de données
 
@@ -249,5 +272,5 @@ Sur chaque annonce, le bouton « En savoir plus » affiche dans la carte toutes 
 
 - **Pas de protection CSRF.** Le cookie de session est `SameSite=Lax`, ce qui bloque l'envoi du cookie par la plupart des requêtes venues d'un autre site, mais aucun jeton CSRF n'est vérifié par l'API.
 - **Le salaire n'est pas contrôlé par l'API.** `POST` et `PATCH` acceptent une valeur non numérique (par exemple `"abc"`) ; seul le formulaire du site impose un nombre.
-- **Lancement en mode développement uniquement.** Le site tourne avec `npm run dev` et `python app.py` ; aucun build React n'est servi par Flask.
+- **Le mode démo ouvre toutes les sessions sans mot de passe.** Avec `DEMO_MODE=1`, n'importe qui peut devenir administrateur par `/api/demo/login?role=admin` et modifier les données ; c'est voulu pour la démonstration, et la base repart des données de démonstration à chaque redémarrage du service. Ce mode ne doit jamais être activé sur un site réel.
 - **Pas de bouton de clôture dans la page d'administration.** L'administrateur peut clôturer une annonce par l'API (`POST /api/ads/<id>/closure`), mais la page admin ne le propose pas ; dans le site, seul le recruteur clôture ses annonces.
