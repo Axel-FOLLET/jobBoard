@@ -8,6 +8,11 @@
  *   total  : l'en-tête X-Total-Count, ou null s'il est absent
  */
 
+// api.js n'est pas un composant : il lit la langue sur l'attribut lang de la page, tenu à jour par LangProvider.
+function inEnglish() {
+  return document.documentElement.lang === 'en'
+}
+
 export async function apiFetch(path, { body, headers, ...options } = {}) {
   // credentials : le cookie de session accompagne chaque appel, y compris côté administration.
   const init = { credentials: 'include', ...options, headers: { ...headers } }
@@ -26,7 +31,7 @@ export async function apiFetch(path, { body, headers, ...options } = {}) {
     response = await fetch(path, init)
   } catch {
     // Serveur arrêté ou coupure réseau : status 0 distingue ce cas d'un refus de l'API.
-    return { ok: false, status: 0, data: null, error: 'Serveur injoignable.', total: null, retryAfter: null }
+    return { ok: false, status: 0, data: null, error: inEnglish() ? 'Server unreachable.' : 'Serveur injoignable.', total: null, retryAfter: null }
   }
 
   // 204 : succès sans contenu (suppression réussie), il n'y a rien à lire dans la réponse.
@@ -42,7 +47,7 @@ export async function apiFetch(path, { body, headers, ...options } = {}) {
   }
 
   // En cas de refus, l'API renvoie toujours {"error": "..."}.
-  const message = typeof data?.error === 'string' ? data.error : `Erreur ${response.status}`
+  const message = typeof data?.error === 'string' ? data.error : `${inEnglish() ? 'Error' : 'Erreur'} ${response.status}`
   // X-Total-Count : nombre total de lignes, utilisé par la pagination de l'administration.
   const totalHeader = response.headers.get('X-Total-Count')
   // Retry-After : secondes d'attente renvoyées avec un 429 (trop de tentatives de connexion).
