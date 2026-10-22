@@ -18,7 +18,7 @@ demo = Blueprint("demo", __name__)
 
 # rôle demandé -> adresse, prénom, nom, page d'arrivée
 ACCOUNTS = {
-    "candidat": ("demo.candidat@example.com", "Camille", "Démo", "/espace-candidat"),
+    "candidat": ("demo.candidat@example.com", "Camille", "Démo", "/"),
     "recruteur": ("demo.recruteur@example.com", "Robin", "Démo", "/recruteur"),
     "admin": ("demo.admin@example.com", "Alex", "Démo", "/admin"),
 }

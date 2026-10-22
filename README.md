@@ -141,7 +141,7 @@ Le mode démo (`DEMO_MODE=1`, `backend/demo.py`) crée au démarrage trois compt
 
 | Méthode | Route | Effet |
 | --- | --- | --- |
-| GET | `/api/demo/login?role=candidat` | ouvre la session du candidat de démo (deux candidatures déjà déposées) et redirige vers `/espace-candidat` |
+| GET | `/api/demo/login?role=candidat` | ouvre la session du candidat de démo (deux candidatures déjà déposées) et redirige vers la page d'accueil `/` |
 | GET | `/api/demo/login?role=recruteur` | ouvre la session du recruteur de démo, rattaché à l'entreprise qui a le plus d'annonces, et redirige vers `/recruteur` |
 | GET | `/api/demo/login?role=admin` | ouvre la session de l'administrateur de démo et redirige vers `/admin` |
 
